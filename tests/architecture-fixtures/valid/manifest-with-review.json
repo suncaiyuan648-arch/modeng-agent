@@ -3,5 +3,11 @@
   "files": [
     "packages/backend/task-engine/module.manifest.json",
     "docs/work-packages/WP-002-contract-kernel.md"
+  ],
+  "workPackages": [
+    {
+      "file": "docs/work-packages/WP-002-contract-kernel.md",
+      "content": "# WP-002\n\n## Authorization\n- packages/backend/task-engine/module.manifest.json"
+    }
   ]
 }

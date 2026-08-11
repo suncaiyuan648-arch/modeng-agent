@@ -1,4 +1,4 @@
-# WP-000：Secret Protection Baseline
+# WP-001：Secret Protection Baseline
 
 ## Metadata
 
@@ -31,7 +31,7 @@
 - `README.md`
 - `deploy/**`
 - `docs/security/**`
-- `docs/work-packages/WP-000-security-baseline.md`
+- `docs/work-packages/WP-001-secret-protection-baseline.md`
 - `package.json`
 - `scripts/**`
 - `tests/security/**`

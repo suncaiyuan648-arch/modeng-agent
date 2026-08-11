@@ -301,10 +301,11 @@ PowerShell 使用 `Copy-Item .env.example .env`。真实密钥保护规则见[�
 ## 项目状态
 
 ```text
-WP-000 Repository + Secret Baseline ✅ completed
-WP-001 Architecture Guard           ✅ completed
-WP-002 Contract Kernel               ← current
-WP-003 Fake TALK Vertical Slice     planned
+WP-000 Repository Bootstrap       ✅ completed
+WP-001 Secret Protection Baseline ✅ completed
+WP-002 Architecture Guard         → next
+WP-003 Contract Kernel             planned
+WP-004 Fake TALK Vertical Slice   planned
 ```
 
 第一条真正的业务验收链路将是 Fake TALK：
@@ -325,10 +326,7 @@ Command → Operation → Task → Worker → Fake Model
 - [AI 工程治理与 Work Package](./AI工程治理与Work-Package规范.md)
 - [密钥与 API Key 保护规范](./docs/security/secrets-management.md)
 - [WP-000 Repository Bootstrap](./docs/work-packages/WP-000-repository-bootstrap.md)
-- [WP-000 Secret Protection Baseline](./docs/work-packages/WP-000-security-baseline.md)
-- [WP-001 Architecture Guard](./docs/work-packages/WP-001-architecture-guard.md)
-- [Implementation Roadmap](./docs/roadmap/IMPLEMENTATION.md)
-- [Architecture Guard Error Codes](./docs/governance/architecture-error-codes.md)
+- [WP-001 Secret Protection Baseline](./docs/work-packages/WP-001-secret-protection-baseline.md)
 - [未来方向记录（非规范）](./docs/future/未来功能初步探讨记录.md)
 
 ## Future

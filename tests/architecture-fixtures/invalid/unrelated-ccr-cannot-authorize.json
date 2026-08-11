@@ -1,0 +1,11 @@
+{
+  "kind": "contract",
+  "expectedCode": "ARCH006",
+  "files": ["packages/shared/contracts/src/index.ts", "docs/contract-changes/CCR-0004.md"],
+  "proposals": [
+    {
+      "file": "docs/contract-changes/CCR-0004.md",
+      "content": "# CR-0004: unrelated change\n\n- Contract owner: shared-contracts\n- Requested by: WP-009\n- Current version: 0.0.0\n- Proposed version: 0.1.0\n- Compatibility: additive-minor\n\n## Authorization\n- packages/backend/task-engine/src/index.ts\n\n## Problem\nProblem.\n\n## Proposed change\nChange.\n\n## Compatibility and affected modules\n- Consumers.\n\n## Fixtures and conformance\n- Fixture.\n\n## Migration / rollout / rollback\n- Rollout."
+    }
+  ]
+}

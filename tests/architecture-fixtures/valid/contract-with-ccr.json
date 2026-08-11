@@ -8,7 +8,7 @@
   "proposals": [
     {
       "file": "docs/contract-changes/CCR-0003.md",
-      "content": "# CR-0003：Add contract\n\n- Contract owner：shared-contracts\n- Requested by：WP-002\n- Current version：1.0.0\n- Proposed version：1.1.0\n- Compatibility：additive-minor\n\n## Problem\nThe current contract is incomplete.\n\n## Proposed change\nAdd the required field.\n\n## Compatibility and affected modules\n- Consumers: frontend and backend.\n\n## Fixtures and conformance\n- Add schema fixture.\n\n## Migration / rollout / rollback\n- Roll forward after consumers are updated."
+      "content": "# CR-0003: Add contract\n\n- Contract owner: shared-contracts\n- Requested by: WP-002\n- Current version: 0.0.0\n- Proposed version: 0.1.0\n- Compatibility: additive-minor\n\n## Authorization\n- packages/shared/contracts/src/index.ts\n\n## Problem\nThe current contract is incomplete.\n\n## Proposed change\nAdd the required field.\n\n## Compatibility and affected modules\n- Consumers: frontend and backend.\n\n## Fixtures and conformance\n- Add schema fixture.\n\n## Migration / rollout / rollback\n- Roll forward after consumers are updated."
     }
   ]
 }

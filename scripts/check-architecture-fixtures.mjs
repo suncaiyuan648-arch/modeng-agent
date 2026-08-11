@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import {
   analyzeModule,
@@ -22,7 +23,7 @@ function moduleFiles(files = {}) {
   return Object.entries(files).map(([filePath, content]) => ({ path: filePath, content }));
 }
 
-function runFixture(fixture) {
+export function runFixture(fixture) {
   switch (fixture.kind) {
     case 'module':
       return analyzeModule({
@@ -45,35 +46,62 @@ function runFixture(fixture) {
       return evaluateContractChanges({
         files: fixture.files ?? [],
         proposals: fixture.proposals ?? [],
+        workPackages: fixture.workPackages ?? [],
       });
     default:
       throw new Error(`ARCH_FIXTURE_UNKNOWN unsupported fixture kind ${fixture.kind}`);
   }
 }
 
-for (const category of ['valid', 'invalid']) {
-  const directory = path.join(fixtureRoot, category);
-  for (const file of await fixtureFiles(directory)) {
-    const fixture = JSON.parse(await readFile(file, 'utf8'));
-    const violations = runFixture(fixture);
-    const codes = violations.map((violation) => violation.code);
-    const relative = path.relative(repositoryRoot, file).replaceAll('\\', '/');
-
-    if (category === 'valid') {
+export function evaluateFixtureResults(results) {
+  const failures = [];
+  for (const result of results) {
+    const codes = result.violations.map((violation) => violation.code);
+    if (result.category === 'valid') {
       if (codes.length > 0) {
-        throw new Error(`ARCH_FIXTURE_UNEXPECTED ${relative} produced ${codes.join(', ')}`);
+        failures.push(`ARCH_FIXTURE_UNEXPECTED ${result.file} produced ${codes.join(', ')}`);
       }
       continue;
     }
 
-    if (codes.length !== 1 || codes[0] !== fixture.expectedCode) {
-      throw new Error(
-        `ARCH_FIXTURE_MISMATCH ${relative} expected ${fixture.expectedCode}, got ${codes.join(', ') || 'none'}`,
+    if (codes.length !== 1 || codes[0] !== result.expectedCode) {
+      failures.push(
+        `ARCH_FIXTURE_MISMATCH ${result.file} expected ${result.expectedCode}, got ${codes.join(', ') || 'none'}`,
       );
     }
   }
+  return failures;
 }
 
-const validCount = (await fixtureFiles(path.join(fixtureRoot, 'valid'))).length;
-const invalidCount = (await fixtureFiles(path.join(fixtureRoot, 'invalid'))).length;
-console.info(`Architecture fixture checks passed (${validCount} valid, ${invalidCount} invalid).`);
+export async function runArchitectureFixtures(root = fixtureRoot) {
+  const results = [];
+  for (const category of ['valid', 'invalid']) {
+    const directory = path.join(root, category);
+    for (const file of await fixtureFiles(directory)) {
+      const fixture = JSON.parse(await readFile(file, 'utf8'));
+      results.push({
+        category,
+        file: path.relative(repositoryRoot, file).replaceAll('\\', '/'),
+        expectedCode: fixture.expectedCode,
+        violations: runFixture(fixture),
+      });
+    }
+  }
+
+  const failures = evaluateFixtureResults(results);
+  if (failures.length > 0) {
+    throw new Error(failures.join('\n'));
+  }
+  return results;
+}
+
+const isMain =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  const results = await runArchitectureFixtures();
+  const validCount = results.filter((result) => result.category === 'valid').length;
+  const invalidCount = results.filter((result) => result.category === 'invalid').length;
+  console.info(
+    `Architecture fixture checks passed (${validCount} valid, ${invalidCount} invalid).`,
+  );
+}

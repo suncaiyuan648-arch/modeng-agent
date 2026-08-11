@@ -25,7 +25,6 @@ Monorepo 验证脚本存在后，根据影响范围运行：
 pnpm verify:changed
 pnpm architecture:check
 pnpm verify:module <module>
-pnpm architecture:fixtures
 ```
 
 涉及配置、Provider、部署或日志时，额外运行：

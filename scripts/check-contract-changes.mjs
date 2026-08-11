@@ -1,47 +1,57 @@
 import { readFile } from 'node:fs/promises';
-import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
-import { evaluateContractChanges, validateContractChangeProposal } from './architecture-guard.mjs';
+import {
+  computeChangeRange,
+  evaluateContractChanges,
+  validateContractChangeProposal,
+} from './architecture-guard.mjs';
 import { repositoryRoot } from './repository.mjs';
 
-function git(...args) {
-  return spawnSync('git', args, { cwd: repositoryRoot, encoding: 'utf8' });
+export async function readAuthorizationDocuments(files, root = repositoryRoot) {
+  const documents = [];
+  for (const file of files) {
+    if (!/^docs\/(?:contract-changes\/CCR-\d+|work-packages\/WP-\d+[^/]*)\.md$/u.test(file)) {
+      continue;
+    }
+    documents.push({ file, content: await readFile(path.join(root, file), 'utf8') });
+  }
+  return documents;
 }
 
-const baseline = process.env['ARCH_BASELINE'] ?? 'bootstrap-v0.1.0';
-const baselineRef = git('rev-parse', '--verify', `${baseline}^{commit}`);
-if (baselineRef.status !== 0) {
-  throw new Error(
-    `ARCH_BASELINE_MISSING baseline ${baseline} is unavailable; fetch tags or set ARCH_BASELINE`,
+export async function runContractChangeCheck({ env, runGit, root = repositoryRoot } = {}) {
+  const range = computeChangeRange({ env, runGit });
+  const documents = await readAuthorizationDocuments(range.files, root);
+  const proposals = documents.filter((document) =>
+    /^docs\/contract-changes\/CCR-\d+\.md$/u.test(document.file),
   );
+  const workPackages = documents.filter((document) =>
+    /^docs\/work-packages\/WP-\d+[^/]*\.md$/u.test(document.file),
+  );
+
+  const violations = evaluateContractChanges({
+    files: range.files,
+    proposals,
+    workPackages,
+  });
+  if (violations.length > 0) {
+    throw violations[0];
+  }
+
+  const invalidProposal = proposals
+    .map((proposal) => validateContractChangeProposal(proposal.file, proposal.content))
+    .find((errors) => errors.length > 0);
+  if (invalidProposal !== undefined) {
+    throw new Error(`ARCH006 PUBLIC_CONTRACT_UNAUTHORIZED_CHANGE ${invalidProposal.join('; ')}`);
+  }
+
+  return range;
 }
 
-const diff = git('diff', '--name-only', '--diff-filter=ACMR', baseline);
-if (diff.status !== 0) {
-  throw new Error(`ARCH_GIT_DIFF ${diff.stderr.trim()}`);
+const isMain =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  const range = await runContractChangeCheck();
+  console.info(`Contract change check passed against ${range.baseRef} (${range.source}).`);
 }
-
-const files = diff.stdout.split(/\r?\n/u).filter(Boolean);
-const proposals = [];
-for (const file of files.filter((candidate) =>
-  /^docs\/contract-changes\/CCR-\d+\.md$/u.test(candidate),
-)) {
-  const content = await readFile(path.join(repositoryRoot, file), 'utf8');
-  proposals.push({ file, content });
-}
-
-const violations = evaluateContractChanges({ files, proposals });
-if (violations.length > 0) {
-  throw violations[0];
-}
-
-const invalidProposal = proposals
-  .map((proposal) => validateContractChangeProposal(proposal.file, proposal.content))
-  .find((errors) => errors.length > 0);
-if (invalidProposal !== undefined) {
-  throw new Error(`ARCH006 PUBLIC_CONTRACT_UNAUTHORIZED_CHANGE ${invalidProposal.join('; ')}`);
-}
-
-console.info(`Contract change check passed against ${baseline}.`);

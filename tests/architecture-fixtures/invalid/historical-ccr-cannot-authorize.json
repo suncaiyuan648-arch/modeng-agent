@@ -1,0 +1,11 @@
+{
+  "kind": "contract",
+  "expectedCode": "ARCH006",
+  "files": ["packages/shared/contracts/src/index.ts"],
+  "proposals": [
+    {
+      "file": "docs/contract-changes/CCR-0002.md",
+      "content": "## Authorization\n- packages/shared/contracts/src/index.ts"
+    }
+  ]
+}

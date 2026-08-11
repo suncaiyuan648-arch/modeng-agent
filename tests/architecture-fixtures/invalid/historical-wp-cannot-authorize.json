@@ -1,0 +1,11 @@
+{
+  "kind": "contract",
+  "expectedCode": "ARCH011",
+  "files": ["packages/backend/task-engine/module.manifest.json"],
+  "workPackages": [
+    {
+      "file": "docs/work-packages/WP-000-repository-bootstrap.md",
+      "content": "## Authorization\n- packages/backend/task-engine/module.manifest.json"
+    }
+  ]
+}

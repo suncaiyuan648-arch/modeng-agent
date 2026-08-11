@@ -1,4 +1,9 @@
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+import process from 'node:process';
+import ts from 'typescript';
+
+import { repositoryRoot } from './repository.mjs';
 
 export const ARCHITECTURE_CODES = Object.freeze({
   DEEP_IMPORT: 'ARCH001',
@@ -26,7 +31,6 @@ export const infrastructurePackages = new Set([
   'ali-oss',
 ]);
 
-const importPattern = /(?:from\s*|import\s*\(|require\s*\()\s*['"]([^'"]+)['"]/g;
 const internalModulePattern = /^@modern-agent\/(.+)$/;
 const sourceExtensions = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
 const tableWritePatterns = [
@@ -42,8 +46,215 @@ export class ArchitectureViolation extends Error {
   }
 }
 
-export function parseImports(content) {
-  return [...content.matchAll(importPattern)].map((match) => match[1]);
+export class ArchitectureRangeError extends Error {
+  constructor(code, message) {
+    super(`${code} ${message}`);
+    this.name = 'ArchitectureRangeError';
+    this.code = code;
+  }
+}
+
+function defaultGit(args, cwd = repositoryRoot) {
+  return spawnSync('git', args, { cwd, encoding: 'utf8' });
+}
+
+function gitOutput(result, description) {
+  if (result.status !== 0) {
+    throw new ArchitectureRangeError(
+      'ARCH_GIT_RANGE',
+      `${description}: ${(result.stderr ?? '').trim() || 'git command failed'}`,
+    );
+  }
+  return result.stdout.trim();
+}
+
+function verifyRef(runGit, ref) {
+  const result = runGit(['rev-parse', '--verify', `${ref}^{commit}`]);
+  return result.status === 0 ? result.stdout.trim() : undefined;
+}
+
+export function computeChangeRange({
+  env = process.env,
+  runGit = (args) => defaultGit(args),
+} = {}) {
+  const pullRequestBase = env.GITHUB_BASE_SHA?.trim() || env.ARCH_BASE_SHA?.trim();
+  let baseRef;
+  let source;
+
+  if (pullRequestBase !== undefined && pullRequestBase !== '') {
+    baseRef = verifyRef(runGit, pullRequestBase);
+    if (baseRef === undefined) {
+      throw new ArchitectureRangeError(
+        'ARCH_BASELINE_MISSING',
+        `PR base ${pullRequestBase} is unavailable; fetch the PR base commit`,
+      );
+    }
+    source = 'pull-request-base';
+  } else {
+    for (const candidate of ['origin/main', 'main']) {
+      const verified = verifyRef(runGit, candidate);
+      if (verified !== undefined) {
+        baseRef = verified;
+        source = `merge-base(${candidate})`;
+        break;
+      }
+    }
+
+    if (baseRef === undefined) {
+      throw new ArchitectureRangeError(
+        'ARCH_BASELINE_MISSING',
+        'no PR base SHA or local main/origin-main ref is available; bootstrap-v0.1.0 is not a valid ordinary WP baseline',
+      );
+    }
+
+    const mergeBase = gitOutput(
+      runGit(['merge-base', 'HEAD', baseRef]),
+      'git merge-base HEAD and main',
+    );
+    if (mergeBase === '') {
+      throw new ArchitectureRangeError(
+        'ARCH_BASELINE_MISSING',
+        `cannot compute merge-base between HEAD and ${baseRef}`,
+      );
+    }
+    baseRef = mergeBase;
+  }
+
+  const files = gitOutput(
+    runGit(['diff', '--name-only', '--diff-filter=ACMR', baseRef]),
+    `git diff from ${baseRef}`,
+  )
+    .split(/\r?\n/u)
+    .map((file) => file.trim().replaceAll('\\', '/'))
+    .filter(Boolean);
+
+  return Object.freeze({ baseRef, source, files });
+}
+
+export function exactPathInAuthorization(content, targetPath) {
+  const normalizedTarget = targetPath.replaceAll('\\', '/');
+  return (content ?? '').split(/\r?\n/u).some((line) => {
+    const normalized = line.trim().replaceAll('`', '');
+    return normalized === `- ${normalizedTarget}` || normalized === normalizedTarget;
+  });
+}
+
+function authorizationSection(content) {
+  const source = content ?? '';
+  const header = /^##\s+Authorization\s*$/mu.exec(source);
+  if (header === null) {
+    return '';
+  }
+  const sectionStart = header.index + header[0].length;
+  const remainder = source.slice(sectionStart);
+  const nextHeading = /^##\s+/mu.exec(remainder);
+  return remainder.slice(0, nextHeading?.index ?? remainder.length);
+}
+
+export function isCurrentAuthorizationDocument({ file, files, content, targetPath }) {
+  return (
+    files.includes(file) &&
+    authorizationSection(content) !== '' &&
+    exactPathInAuthorization(authorizationSection(content), targetPath)
+  );
+}
+
+export function findCurrentAuthorization({ files, documents = [], targetPath, kind }) {
+  const pattern =
+    kind === 'ccr'
+      ? /^docs\/contract-changes\/CCR-\d+\.md$/u
+      : /^docs\/work-packages\/WP-\d+[^/]*\.md$/u;
+  return documents.find(
+    (document) =>
+      pattern.test(document.file) &&
+      isCurrentAuthorizationDocument({
+        file: document.file,
+        files,
+        content: document.content,
+        targetPath,
+      }),
+  );
+}
+
+export function mergeBaseAuthorization({ files, documents = [], targetPaths, kind }) {
+  return targetPaths.every(
+    (targetPath) => findCurrentAuthorization({ files, documents, targetPath, kind }) !== undefined,
+  );
+}
+
+function sourceFile(content, fileName = 'fixture.ts') {
+  const scriptKind = /\.tsx?$/u.test(fileName) ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  return ts.createSourceFile(fileName, content, ts.ScriptTarget.Latest, true, scriptKind);
+}
+
+function isStringLiteral(node) {
+  return ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node);
+}
+
+function collectModuleSpecifiers(content, fileName = 'fixture.ts', includeExports = false) {
+  const result = [];
+  const file = sourceFile(content, fileName);
+
+  function visit(node) {
+    if (ts.isImportDeclaration(node) && isStringLiteral(node.moduleSpecifier)) {
+      result.push(node.moduleSpecifier.text);
+    }
+
+    if (includeExports && ts.isExportDeclaration(node) && node.moduleSpecifier !== undefined) {
+      if (isStringLiteral(node.moduleSpecifier)) {
+        result.push(node.moduleSpecifier.text);
+      }
+    }
+
+    if (ts.isCallExpression(node) && node.arguments.length === 1) {
+      const argument = node.arguments[0];
+      if (!isStringLiteral(argument)) {
+        ts.forEachChild(node, visit);
+        return;
+      }
+
+      const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
+      if (isDynamicImport || isRequire) {
+        result.push(argument.text);
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  }
+
+  visit(file);
+  return result;
+}
+
+export function parseImports(content, fileName = 'fixture.ts') {
+  return collectModuleSpecifiers(content, fileName, true);
+}
+
+export function parseExports(content, fileName = 'fixture.ts') {
+  const file = sourceFile(content, fileName);
+  const result = [];
+
+  function visit(node) {
+    if (ts.isExportDeclaration(node) && node.moduleSpecifier !== undefined) {
+      if (isStringLiteral(node.moduleSpecifier)) {
+        result.push(node.moduleSpecifier.text);
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(file);
+  return result;
+}
+
+export function isDeepImportSpecifier(specifier) {
+  const segments = specifier.split('/').filter((segment) => segment !== '.' && segment !== '..');
+  return segments.some((segment) => segment === 'internal');
+}
+
+export function isReactSpecifier(specifier) {
+  return specifier === 'react' || specifier === 'react-dom' || specifier.startsWith('react/');
 }
 
 export function classifyLayer(module) {
@@ -103,21 +314,33 @@ export function analyzeModule({ module, manifest, packageJson, files }) {
 
   for (const file of files) {
     const filePath = sourcePath(file);
-    const imports = parseImports(file.content);
+    const imports = parseImports(file.content, filePath);
 
     for (const specifier of imports) {
       const target = internalTarget(specifier);
 
-      if (target !== undefined) {
-        if (specifier.split('/').length > 2) {
-          addViolation(
-            violations,
-            ARCHITECTURE_CODES.DEEP_IMPORT,
-            `${filePath} imports internal module path ${specifier}`,
-          );
-          continue;
-        }
+      if (
+        (layer === 'backend' || layer === 'shared' || layer === 'infrastructure') &&
+        isReactSpecifier(specifier)
+      ) {
+        addViolation(
+          violations,
+          ARCHITECTURE_CODES.LAYER_BOUNDARY,
+          `${filePath} imports React from a non-frontend module`,
+        );
+        continue;
+      }
 
+      if (isDeepImportSpecifier(specifier)) {
+        addViolation(
+          violations,
+          ARCHITECTURE_CODES.DEEP_IMPORT,
+          `${filePath} imports internal module path ${specifier}`,
+        );
+        continue;
+      }
+
+      if (target !== undefined) {
         const importedLayer = targetLayer(target);
         const forbiddenLayerDirection =
           (layer === 'frontend' &&
@@ -242,7 +465,7 @@ export function findCircularDependencies(modules) {
     }
 
     for (const file of module.files ?? []) {
-      for (const specifier of parseImports(file.content)) {
+      for (const specifier of parseImports(file.content, sourcePath(file))) {
         const target = internalTarget(specifier);
         if (target !== undefined && known.has(target)) {
           targets.add(target);
@@ -344,7 +567,7 @@ export function analyzePublicApi({
     );
   }
 
-  if (/from\s+['"][^'"]*\/internal\//.test(indexSource ?? '')) {
+  if (parseExports(indexSource ?? '', 'src/index.ts').some(isDeepImportSpecifier)) {
     addViolation(
       violations,
       ARCHITECTURE_CODES.INVALID_PUBLIC_EXPORT,
@@ -385,44 +608,67 @@ export function validateContractChangeProposal(file, content) {
 const frozenContractPattern =
   /^(?:packages\/shared\/contracts\/|packages\/(?:frontend|backend|infrastructure)\/.*\/src\/index\.ts$|packages\/.*(?:contract|state[-_]machine|operation-status).*\.(?:ts|tsx|mts|cts|json))/u;
 
-function isFrozenContractPath(file) {
+export function isFrozenContractPath(file) {
   return frozenContractPattern.test(file);
 }
 
-function isManifestPath(file) {
+export function isManifestPath(file) {
   return file.endsWith('/module.manifest.json') || file === 'module.manifest.json';
 }
 
-function isWorkPackageEvidence(file) {
-  return /^docs\/work-packages\/WP-\d+[^/]*\.md$/u.test(file);
-}
-
-function isReviewEvidence(file) {
-  return isWorkPackageEvidence(file) || /^docs\/adr\/ADR-\d+[^/]*\.md$/u.test(file);
-}
-
-export function evaluateContractChanges({ files, proposals = [] }) {
+export function evaluateContractChanges({ files, proposals = [], workPackages = [] }) {
   const violations = [];
-  const changedProposals = proposals.filter((proposal) => files.includes(proposal.file));
-  const validProposal = changedProposals.find(
-    (proposal) => validateContractChangeProposal(proposal.file, proposal.content).length === 0,
-  );
-  const contractChanged = files.some(isFrozenContractPath);
-  const manifestChanged = files.some(isManifestPath);
+  const contractPaths = files.filter(isFrozenContractPath);
+  const manifestPaths = files.filter(isManifestPath);
 
-  if (contractChanged && validProposal === undefined) {
+  const authorizedContractChange =
+    contractPaths.length > 0 &&
+    mergeBaseAuthorization({
+      files,
+      documents: proposals.filter((proposal) =>
+        /^docs\/contract-changes\/CCR-\d+\.md$/u.test(proposal.file),
+      ),
+      targetPaths: contractPaths,
+      kind: 'ccr',
+    }) &&
+    contractPaths.every((contractPath) =>
+      proposals.some(
+        (proposal) =>
+          files.includes(proposal.file) &&
+          validateContractChangeProposal(proposal.file, proposal.content).length === 0 &&
+          mergeBaseAuthorization({
+            files,
+            documents: [proposal],
+            targetPaths: [contractPath],
+            kind: 'ccr',
+          }),
+      ),
+    );
+
+  const authorizedManifestChange =
+    manifestPaths.length > 0 &&
+    mergeBaseAuthorization({
+      files,
+      documents: workPackages.filter((document) =>
+        /^docs\/work-packages\/WP-\d+[^/]*\.md$/u.test(document.file),
+      ),
+      targetPaths: manifestPaths,
+      kind: 'wp',
+    });
+
+  if (contractPaths.length > 0 && !authorizedContractChange) {
     addViolation(
       violations,
       ARCHITECTURE_CODES.UNAUTHORIZED_CONTRACT_CHANGE,
-      'frozen Contract changed without a valid Contract Change Proposal',
+      'frozen Contract changed without a valid current-range CCR authorizing each changed path',
     );
   }
 
-  if (manifestChanged && !files.some(isReviewEvidence)) {
+  if (manifestPaths.length > 0 && !authorizedManifestChange) {
     addViolation(
       violations,
       ARCHITECTURE_CODES.ARCHITECTURE_REVIEW_REQUIRED,
-      'module.manifest.json changed without Work Package or ADR review evidence',
+      'module.manifest.json changed without a current-range Work Package authorizing each changed manifest',
     );
   }
 

@@ -137,9 +137,3 @@
 - `VITE_*` values are public by definition; provider credentials stay in backend runtime environments.
 - Before committing, run `pnpm security:scan:staged`; CI runs `pnpm security:scan`.
 - Follow [docs/security/secrets-management.md](./docs/security/secrets-management.md) for storage, logging, rotation and incident response.
-
-## 11. Architecture Guard
-
-- `pnpm architecture:check` must validate both the real workspace and the negative fixture suite.
-- Deliberately invalid fixtures must fail with the documented `ARCHxxx` code; a green positive check alone is not evidence that a boundary is enforced.
-- Do not widen `module.manifest.json#allowedDependencies` to silence a failure. Manifest changes are Yellow-zone and require Work Package or ADR evidence.

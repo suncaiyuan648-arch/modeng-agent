@@ -1,0 +1,18 @@
+{
+  "kind": "public-api",
+  "expectedCode": "ARCH009",
+  "module": {
+    "group": "packages",
+    "relative": "backend/model-supply",
+    "name": "fixture"
+  },
+  "manifest": {
+    "publicExports": ["."]
+  },
+  "packageJson": {
+    "exports": {
+      ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+    }
+  },
+  "indexSource": "export { debug } from './internal';"
+}
