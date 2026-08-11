@@ -1,0 +1,15 @@
+{
+  "kind": "module",
+  "expectedCode": "ARCH001",
+  "module": {
+    "group": "packages",
+    "relative": "backend/capabilities/fixture",
+    "name": "fixture"
+  },
+  "manifest": {
+    "allowedDependencies": ["backend-model-supply"]
+  },
+  "files": {
+    "packages/backend/capabilities/fixture/src/index.ts": "import { route } from '@modern-agent/backend-model-supply/internal/router';\nexport { route };"
+  }
+}

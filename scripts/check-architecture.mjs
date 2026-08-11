@@ -6,6 +6,7 @@ const checks = [
   'check-boundaries.mjs',
   'check-public-api.mjs',
   'check-contract-changes.mjs',
+  'check-architecture-fixtures.mjs',
 ];
 
 for (const check of checks) {

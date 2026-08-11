@@ -1,0 +1,16 @@
+{
+  "kind": "module",
+  "expectedCode": "ARCH007",
+  "module": {
+    "group": "packages",
+    "relative": "backend/task-engine",
+    "name": "fixture"
+  },
+  "manifest": {
+    "allowedDependencies": [],
+    "ownsTables": ["task_runs"]
+  },
+  "files": {
+    "packages/backend/task-engine/src/index.ts": "await db.query('INSERT INTO operations (id) VALUES (1)');"
+  }
+}

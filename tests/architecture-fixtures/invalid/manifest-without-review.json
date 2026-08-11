@@ -1,0 +1,5 @@
+{
+  "kind": "contract",
+  "expectedCode": "ARCH011",
+  "files": ["packages/backend/task-engine/module.manifest.json"]
+}

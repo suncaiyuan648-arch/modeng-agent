@@ -1,0 +1,15 @@
+{
+  "kind": "module",
+  "expectedCode": "ARCH005",
+  "module": {
+    "group": "packages",
+    "relative": "backend/capabilities/fixture",
+    "name": "fixture"
+  },
+  "manifest": {
+    "allowedDependencies": []
+  },
+  "files": {
+    "packages/backend/capabilities/fixture/src/index.ts": "import { PrismaClient } from '@prisma/client';\nexport const client = new PrismaClient();"
+  }
+}

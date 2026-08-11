@@ -64,7 +64,12 @@ function readGitFile(file, staged) {
     return execFileSync('git', ['show', `:${file}`], { encoding: 'utf8' });
   }
 
-  const stats = statSync(file);
+  let stats;
+  try {
+    stats = statSync(file);
+  } catch {
+    return null;
+  }
   if (!stats.isFile() || stats.size > MAX_FILE_BYTES) {
     return null;
   }

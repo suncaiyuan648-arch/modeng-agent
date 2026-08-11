@@ -1,0 +1,7 @@
+{
+  "kind": "contract",
+  "files": [
+    "packages/backend/task-engine/module.manifest.json",
+    "docs/work-packages/WP-002-contract-kernel.md"
+  ]
+}
