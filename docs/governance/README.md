@@ -9,4 +9,4 @@
 - [Contract Change Proposal 模板](./contract-change.template.md)
 - [ADR 模板](../adr/ADR-template.md)
 
-WP-000 已在根 `scripts/` 提供 Manifest、Runtime Boundary、Public API 和 Contract Change 正向检查，并由 `pnpm architecture:check` 聚合。WP-001 仍需加入故意违规 Fixture，证明每条规则会因正确诊断而失败。
+WP-000 已在根 `scripts/` 提供 Manifest、Runtime Boundary、Public API 和 Contract Change 正向检查，并由 `pnpm architecture:check` 聚合。WP-001 已建立密钥扫描、环境边界和轮换规范；WP-002 仍需加入故意违规 Fixture，证明每条架构规则会因正确诊断而失败。

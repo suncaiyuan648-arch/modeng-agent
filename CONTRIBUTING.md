@@ -27,6 +27,14 @@ pnpm architecture:check
 pnpm verify:module <module>
 ```
 
+涉及配置、Provider、部署或日志时，额外运行：
+
+```text
+pnpm security:scan:staged
+```
+
+真实 API Key、密码、Token、私钥和连接串不得进入仓库。请先阅读[密钥与 API Key 保护规范](./docs/security/secrets-management.md)。
+
 高风险或全仓变更运行 `pnpm verify`。WP-000 已提供这些脚本；如果环境故障导致命令未执行，必须在 PR 中记录原因，不能把未运行写成成功证据。
 
 架构或 Public Contract 变化还必须包含：

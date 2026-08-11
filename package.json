@@ -18,10 +18,13 @@
     "lint": "eslint apps packages scripts vitest.config.ts --max-warnings 0",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "vitest run",
+    "security:scan": "node scripts/check-secrets.mjs",
+    "security:scan:staged": "node scripts/check-secrets.mjs --staged",
+    "security:generate-secret": "node scripts/generate-secret.mjs",
     "architecture:check": "node scripts/check-architecture.mjs",
     "verify:module": "node scripts/verify-module.mjs",
     "verify:changed": "node scripts/verify-changed.mjs",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm architecture:check && pnpm build"
+    "verify": "pnpm format:check && pnpm security:scan && pnpm lint && pnpm typecheck && pnpm test && pnpm architecture:check && pnpm build"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

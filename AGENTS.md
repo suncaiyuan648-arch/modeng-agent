@@ -130,3 +130,10 @@
 
 - 标记不必要的 public surface 扩张、跨模块状态写入、基础设施泄漏、deep import、Contract 绕过和缺失行为测试。
 - Reviewer 建议不能覆盖失败的静态门禁或测试。
+
+## 10. Secret handling
+
+- Never commit real API keys, passwords, tokens, private keys, credentials or connection strings.
+- `VITE_*` values are public by definition; provider credentials stay in backend runtime environments.
+- Before committing, run `pnpm security:scan:staged`; CI runs `pnpm security:scan`.
+- Follow [docs/security/secrets-management.md](./docs/security/secrets-management.md) for storage, logging, rotation and incident response.

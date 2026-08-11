@@ -41,13 +41,13 @@ Agent 理解需求
 
 当前仓库正在建设基础设施，以下是首期目标能力，不代表已经全部上线：
 
-| Capability | 目标 |
-| --- | --- |
-| `TALK` | AI 对话、流式文本和工具调用 |
-| `SUMMARY` | 文本、文件和内容总结 |
-| `IMAGE` | 图片生成、参考图生成和批量生成 |
-| `VIDEO` | 文生视频、图生视频等长任务 |
-| `AUDIO` | 语音识别与内容转写 |
+| Capability | 目标                           |
+| ---------- | ------------------------------ |
+| `TALK`     | AI 对话、流式文本和工具调用    |
+| `SUMMARY`  | 文本、文件和内容总结           |
+| `IMAGE`    | 图片生成、参考图生成和批量生成 |
+| `VIDEO`    | 文生视频、图生视频等长任务     |
+| `AUDIO`    | 语音识别与内容转写             |
 
 这些能力共享统一的 Runtime、Task、Event、Model、Asset、Memory 和 Billing 边界，不为每种能力重新复制一套基础设施。
 
@@ -288,7 +288,13 @@ pnpm verify
 pnpm dev:web
 pnpm dev:api
 pnpm dev:worker
+
+# 本地需要环境变量时复制样例，真实值只保留在未跟踪的 .env
+cp .env.example .env              # macOS/Linux
+pnpm security:scan:staged          # 提交前扫描暂存区
 ```
+
+PowerShell 使用 `Copy-Item .env.example .env`。真实密钥保护规则见[密钥与 API Key 保护规范](./docs/security/secrets-management.md)。
 
 当前可运行入口是 Phase 0 的最小 Composition Root；业务 Agent 尚未接入。
 
@@ -296,9 +302,10 @@ pnpm dev:worker
 
 ```text
 WP-000 Repository Bootstrap       ✅ completed
-WP-001 Architecture Guard         → next
-WP-002 Contract Kernel             planned
-WP-003 Fake TALK Vertical Slice   planned
+WP-001 Secret Protection Baseline ✅ completed
+WP-002 Architecture Guard         → next
+WP-003 Contract Kernel             planned
+WP-004 Fake TALK Vertical Slice   planned
 ```
 
 第一条真正的业务验收链路将是 Fake TALK：
@@ -317,7 +324,9 @@ Command → Operation → Task → Worker → Fake Model
 - [冻结跨模块契约规则](./docs/architecture/01-跨模块契约与架构决策.md)
 - [完整 V2.5 架构参考](./React-Node-全栈Agent架构规范.md)
 - [AI 工程治理与 Work Package](./AI工程治理与Work-Package规范.md)
+- [密钥与 API Key 保护规范](./docs/security/secrets-management.md)
 - [WP-000 Repository Bootstrap](./docs/work-packages/WP-000-repository-bootstrap.md)
+- [WP-001 Secret Protection Baseline](./docs/work-packages/WP-001-secret-protection-baseline.md)
 - [未来方向记录（非规范）](./docs/future/未来功能初步探讨记录.md)
 
 ## Future
