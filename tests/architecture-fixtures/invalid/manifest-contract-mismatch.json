@@ -1,0 +1,15 @@
+{
+  "kind": "module",
+  "expectedCode": "ARCH010",
+  "module": {
+    "group": "packages",
+    "relative": "backend/task-engine",
+    "name": "fixture"
+  },
+  "manifest": {
+    "allowedDependencies": []
+  },
+  "files": {
+    "packages/backend/task-engine/src/index.ts": "import { MODEL_SUPPLY_MODULE } from '@modern-agent/backend-model-supply';\nexport { MODEL_SUPPLY_MODULE };"
+  }
+}

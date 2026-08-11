@@ -1,0 +1,20 @@
+{
+  "kind": "module",
+  "module": {
+    "group": "packages",
+    "relative": "backend/capabilities/fixture",
+    "name": "fixture"
+  },
+  "manifest": {
+    "allowedDependencies": ["shared-contracts", "backend-model-supply"]
+  },
+  "packageJson": {
+    "dependencies": {
+      "@modern-agent/shared-contracts": "workspace:*",
+      "@modern-agent/backend-model-supply": "workspace:*"
+    }
+  },
+  "files": {
+    "packages/backend/capabilities/fixture/src/index.ts": "import { BACKEND_MODEL_SUPPLY_MODULE } from '@modern-agent/backend-model-supply';\nimport { SHARED_CONTRACTS_MODULE } from '@modern-agent/shared-contracts';\nexport { BACKEND_MODEL_SUPPLY_MODULE, SHARED_CONTRACTS_MODULE };"
+  }
+}

@@ -21,7 +21,7 @@
 - 不实现 TALK、SUMMARY、IMAGE、VIDEO 或 AUDIO。
 - 不创建 Provider Adapter、数据库业务表、Prisma Migration、BullMQ Consumer 或 OSS 调用。
 - 不实现 Campaign、Search、Publish、Monitoring 或通用 Workflow DSL。
-- 不冻结 WP-003 才负责的业务 Contract。
+- 不冻结 WP-002 才负责的业务 Contract。
 - 不用空命令或永远返回成功的检查器伪造门禁。
 
 ## Allowed write paths
@@ -103,5 +103,5 @@
 
 - 修改文件：根工具链；`apps/web|api|worker`；39 个分层 Package 骨架；四层 AGENTS；Manifest/架构脚本；CI、Deploy、Prisma 占位和开工冻结文档。
 - 实际命令与结果：`pnpm install --frozen-lockfile`、`pnpm verify`、`pnpm verify:changed`、`pnpm verify:module backend-task-engine` 均成功；42 个 Manifest 通过；3 个测试文件/3 个测试通过；42 个工作区 typecheck/build 通过。
-- 未验证项：GitHub Actions 尚未在远端运行；仓库尚无基线 commit，因此 Contract Change 检查明确跳过 Git diff 阶段。
-- 剩余风险：WP-002 尚未加入故意违规 Fixture，当前架构门禁只验证正向骨架。
+- 当时未验证项：GitHub Actions 尚未在远端运行；当前已创建并推送 `bootstrap-v0.1.0`，后续 Contract Change 检查以该基线执行。
+- 剩余风险：WP-001 Architecture Guard 已在分支通过验证，合并 `main` 前仍必须保留 CI 全绿门禁。

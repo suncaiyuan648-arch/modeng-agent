@@ -21,6 +21,7 @@
     "security:scan": "node scripts/check-secrets.mjs",
     "security:scan:staged": "node scripts/check-secrets.mjs --staged",
     "security:generate-secret": "node scripts/generate-secret.mjs",
+    "architecture:fixtures": "node scripts/check-architecture-fixtures.mjs",
     "architecture:check": "node scripts/check-architecture.mjs",
     "verify:module": "node scripts/verify-module.mjs",
     "verify:changed": "node scripts/verify-changed.mjs",

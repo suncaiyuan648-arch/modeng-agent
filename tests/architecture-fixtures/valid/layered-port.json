@@ -1,0 +1,19 @@
+{
+  "kind": "module",
+  "module": {
+    "group": "packages",
+    "relative": "infrastructure/fixture",
+    "name": "fixture"
+  },
+  "manifest": {
+    "allowedDependencies": ["backend-platform-core"]
+  },
+  "packageJson": {
+    "dependencies": {
+      "@modern-agent/backend-platform-core": "workspace:*"
+    }
+  },
+  "files": {
+    "packages/infrastructure/fixture/src/index.ts": "import { BACKEND_PLATFORM_CORE_MODULE } from '@modern-agent/backend-platform-core';\nexport { BACKEND_PLATFORM_CORE_MODULE };"
+  }
+}
