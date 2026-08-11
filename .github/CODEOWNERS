@@ -1,0 +1,9 @@
+# Governance ownership declaration. Required Code Owner approval is enabled when collaboration expands.
+/.github/ @suncaiyuan648-arch
+/AGENTS.md @suncaiyuan648-arch
+/docs/governance/ @suncaiyuan648-arch
+/docs/work-packages/ @suncaiyuan648-arch
+/scripts/architecture-guard.mjs @suncaiyuan648-arch
+/scripts/trusted-governance-check.mjs @suncaiyuan648-arch
+/tests/architecture/ @suncaiyuan648-arch
+/tests/architecture-fixtures/ @suncaiyuan648-arch

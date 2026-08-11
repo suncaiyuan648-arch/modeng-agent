@@ -1,0 +1,31 @@
+name: Trusted Governance
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  governance-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ARCH_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      ARCH_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Checkout trusted base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Inspect pull request governance integrity
+        run: node scripts/trusted-governance-check.mjs
