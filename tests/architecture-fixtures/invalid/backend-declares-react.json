@@ -1,0 +1,18 @@
+{
+  "kind": "module",
+  "expectedCode": "ARCH003",
+  "module": {
+    "group": "packages",
+    "relative": "backend/model-supply",
+    "name": "fixture"
+  },
+  "manifest": {
+    "allowedDependencies": []
+  },
+  "packageJson": {
+    "dependencies": {
+      "react": "latest"
+    }
+  },
+  "files": {}
+}

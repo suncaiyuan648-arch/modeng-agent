@@ -31,7 +31,6 @@ export const infrastructurePackages = new Set([
   'ali-oss',
 ]);
 
-const internalModulePattern = /^@modern-agent\/(.+)$/;
 const sourceExtensions = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
 const tableWritePatterns = [
   /\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+["`]?([A-Za-z_][A-Za-z0-9_]*)/gi,
@@ -73,6 +72,33 @@ function verifyRef(runGit, ref) {
   return result.status === 0 ? result.stdout.trim() : undefined;
 }
 
+function normalizePath(file) {
+  return file.replaceAll('\\', '/');
+}
+
+function parseDiffEntries(output) {
+  return output
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const fields = line.split(/\s+/u);
+      const status = fields[0]?.[0];
+      if (status === 'R' || status === 'C') {
+        const oldPath = normalizePath(fields[1] ?? '');
+        const newPath = normalizePath(fields[2] ?? '');
+        return { status, oldPath, newPath, paths: [oldPath, newPath].filter(Boolean) };
+      }
+      const file = normalizePath(fields[1] ?? '');
+      return {
+        status,
+        oldPath: status === 'D' ? file : undefined,
+        newPath: status === 'D' ? undefined : file,
+        paths: file ? [file] : [],
+      };
+    });
+}
+
 export function computeChangeRange({
   env = process.env,
   runGit = (args) => defaultGit(args),
@@ -91,7 +117,7 @@ export function computeChangeRange({
     }
     source = 'pull-request-base';
   } else {
-    for (const candidate of ['origin/main', 'main']) {
+    for (const candidate of ['main', 'origin/main']) {
       const verified = verifyRef(runGit, candidate);
       if (verified !== undefined) {
         baseRef = verified;
@@ -120,15 +146,21 @@ export function computeChangeRange({
     baseRef = mergeBase;
   }
 
-  const files = gitOutput(
-    runGit(['diff', '--name-only', '--diff-filter=ACMR', baseRef]),
+  const diff = gitOutput(
+    runGit(['diff', '--name-status', '-M', '--diff-filter=ACMRD', baseRef]),
     `git diff from ${baseRef}`,
-  )
-    .split(/\r?\n/u)
-    .map((file) => file.trim().replaceAll('\\', '/'))
-    .filter(Boolean);
+  );
+  const entries = parseDiffEntries(diff);
+  const untrackedResult = runGit(['ls-files', '--others', '--exclude-standard']);
+  if (untrackedResult.status === 0 && untrackedResult.stdout.trim() !== '') {
+    for (const file of untrackedResult.stdout.split(/\r?\n/u).filter(Boolean)) {
+      const normalized = normalizePath(file.trim());
+      entries.push({ status: 'A', oldPath: undefined, newPath: normalized, paths: [normalized] });
+    }
+  }
+  const files = [...new Set(entries.flatMap((entry) => entry.paths))];
 
-  return Object.freeze({ baseRef, source, files });
+  return Object.freeze({ baseRef, source, entries, files });
 }
 
 export function exactPathInAuthorization(content, targetPath) {
@@ -191,19 +223,31 @@ function isStringLiteral(node) {
   return ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node);
 }
 
-function collectModuleSpecifiers(content, fileName = 'fixture.ts', includeExports = false) {
+function moduleReference(specifier, kind) {
+  return { specifier, kind };
+}
+
+function collectModuleReferences(content, fileName = 'fixture.ts', includeExports = true) {
   const result = [];
   const file = sourceFile(content, fileName);
 
   function visit(node) {
     if (ts.isImportDeclaration(node) && isStringLiteral(node.moduleSpecifier)) {
-      result.push(node.moduleSpecifier.text);
+      result.push(moduleReference(node.moduleSpecifier.text, 'import'));
     }
 
     if (includeExports && ts.isExportDeclaration(node) && node.moduleSpecifier !== undefined) {
       if (isStringLiteral(node.moduleSpecifier)) {
-        result.push(node.moduleSpecifier.text);
+        result.push(moduleReference(node.moduleSpecifier.text, 'export'));
       }
+    }
+
+    if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      isStringLiteral(node.moduleReference.expression)
+    ) {
+      result.push(moduleReference(node.moduleReference.expression.text, 'import-equals'));
     }
 
     if (ts.isCallExpression(node) && node.arguments.length === 1) {
@@ -215,8 +259,18 @@ function collectModuleSpecifiers(content, fileName = 'fixture.ts', includeExport
 
       const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
       const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
-      if (isDynamicImport || isRequire) {
-        result.push(argument.text);
+      const isRequireResolve =
+        ts.isPropertyAccessExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        node.expression.expression.text === 'require' &&
+        node.expression.name.text === 'resolve';
+      if (isDynamicImport || isRequire || isRequireResolve) {
+        result.push(
+          moduleReference(
+            argument.text,
+            isRequireResolve ? 'require.resolve' : isRequire ? 'require' : 'dynamic-import',
+          ),
+        );
       }
     }
 
@@ -225,36 +279,46 @@ function collectModuleSpecifiers(content, fileName = 'fixture.ts', includeExport
 
   visit(file);
   return result;
+}
+
+export function parseImportReferences(content, fileName = 'fixture.ts') {
+  return collectModuleReferences(content, fileName, true);
 }
 
 export function parseImports(content, fileName = 'fixture.ts') {
-  return collectModuleSpecifiers(content, fileName, true);
+  return parseImportReferences(content, fileName).map((reference) => reference.specifier);
 }
 
 export function parseExports(content, fileName = 'fixture.ts') {
-  const file = sourceFile(content, fileName);
-  const result = [];
+  return parseImportReferences(content, fileName)
+    .filter((reference) => reference.kind === 'export')
+    .map((reference) => reference.specifier);
+}
 
-  function visit(node) {
-    if (ts.isExportDeclaration(node) && node.moduleSpecifier !== undefined) {
-      if (isStringLiteral(node.moduleSpecifier)) {
-        result.push(node.moduleSpecifier.text);
-      }
-    }
-    ts.forEachChild(node, visit);
+export function packageSpecifier(specifier) {
+  const match = /^(@modern-agent\/[^/]+)(?:\/(.*))?$/u.exec(specifier);
+  if (match === null) {
+    return undefined;
   }
-
-  visit(file);
-  return result;
+  return { packageName: match[1], subpath: match[2] };
 }
 
 export function isDeepImportSpecifier(specifier) {
+  const packageInfo = packageSpecifier(specifier);
+  if (packageInfo !== undefined) {
+    return packageInfo.subpath !== undefined;
+  }
   const segments = specifier.split('/').filter((segment) => segment !== '.' && segment !== '..');
   return segments.some((segment) => segment === 'internal');
 }
 
 export function isReactSpecifier(specifier) {
-  return specifier === 'react' || specifier === 'react-dom' || specifier.startsWith('react/');
+  return (
+    specifier === 'react' ||
+    specifier.startsWith('react/') ||
+    specifier === 'react-dom' ||
+    specifier.startsWith('react-dom/')
+  );
 }
 
 export function classifyLayer(module) {
@@ -270,7 +334,10 @@ export function isCapability(module) {
 }
 
 export function internalTarget(specifier) {
-  return internalModulePattern.exec(specifier)?.[1];
+  const packageInfo = packageSpecifier(specifier);
+  return packageInfo === undefined
+    ? undefined
+    : packageInfo.packageName.slice('@modern-agent/'.length);
 }
 
 function targetLayer(target) {
@@ -285,7 +352,74 @@ function addViolation(violations, code, message) {
   violations.push(new ArchitectureViolation(code, message));
 }
 
-export function analyzeModule({ module, manifest, packageJson, files }) {
+function moduleRoot(module) {
+  return path.resolve(module.root ?? path.join(repositoryRoot, module.group, module.relative));
+}
+
+function isWithin(target, root) {
+  const relative = path.relative(root, target);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function findTargetModule(resolvedPath, workspaceModules = []) {
+  return workspaceModules.find((candidate) => isWithin(resolvedPath, moduleRoot(candidate)));
+}
+
+function layerBoundary(layer, importedLayer, module) {
+  return (
+    (layer === 'frontend' && (importedLayer === 'backend' || importedLayer === 'infrastructure')) ||
+    (layer === 'backend' && importedLayer === 'frontend') ||
+    (layer === 'shared' && importedLayer !== 'shared') ||
+    (layer === 'infrastructure' && importedLayer === 'frontend') ||
+    (module.group === 'apps' &&
+      module.name === 'web' &&
+      (importedLayer === 'backend' || importedLayer === 'infrastructure')) ||
+    (module.group === 'apps' &&
+      (module.name === 'api' || module.name === 'worker') &&
+      importedLayer === 'frontend')
+  );
+}
+
+function resolveRelativeReference(module, filePath, specifier, workspaceModules) {
+  const fileAbsolute = path.isAbsolute(filePath)
+    ? filePath
+    : path.resolve(repositoryRoot, filePath);
+  const resolved = path.resolve(path.dirname(fileAbsolute), specifier);
+  const owner = findTargetModule(resolved, workspaceModules);
+  return { resolved, owner, sameModule: isWithin(resolved, moduleRoot(module)) };
+}
+
+function analyzeRelativeReference({
+  module,
+  filePath,
+  specifier,
+  workspaceModules,
+  layer,
+  violations,
+}) {
+  const reference = resolveRelativeReference(module, filePath, specifier, workspaceModules);
+  if (reference.sameModule) {
+    return;
+  }
+
+  const importedLayer = reference.owner === undefined ? undefined : classifyLayer(reference.owner);
+  if (importedLayer !== undefined && layerBoundary(layer, importedLayer, module)) {
+    addViolation(
+      violations,
+      ARCHITECTURE_CODES.LAYER_BOUNDARY,
+      `${filePath} imports a relative module across a frozen layer boundary: ${specifier}`,
+    );
+    return;
+  }
+
+  addViolation(
+    violations,
+    ARCHITECTURE_CODES.DEEP_IMPORT,
+    `${filePath} imports a module outside its public package boundary: ${specifier}`,
+  );
+}
+
+export function analyzeModule({ module, manifest, packageJson, files, workspaceModules = [] }) {
   const violations = [];
   const layer = classifyLayer(module);
   const capability = isCapability(module);
@@ -303,6 +437,15 @@ export function analyzeModule({ module, manifest, packageJson, files }) {
 
   for (const dependency of Object.keys(declaredDependencies)) {
     const target = internalTarget(dependency);
+    const packageInfo = packageSpecifier(dependency);
+    if (packageInfo?.subpath !== undefined) {
+      addViolation(
+        violations,
+        ARCHITECTURE_CODES.DEEP_IMPORT,
+        `${module.name} declares a non-root workspace dependency ${dependency}`,
+      );
+      continue;
+    }
     if (target !== undefined && !allowedDependencies.has(target)) {
       addViolation(
         violations,
@@ -310,13 +453,44 @@ export function analyzeModule({ module, manifest, packageJson, files }) {
         `${module.name} declares ${target} outside its manifest`,
       );
     }
+
+    if (
+      (layer === 'backend' || layer === 'shared' || layer === 'infrastructure') &&
+      isReactSpecifier(dependency)
+    ) {
+      addViolation(
+        violations,
+        ARCHITECTURE_CODES.LAYER_BOUNDARY,
+        `${module.name} declares React in a non-frontend module`,
+      );
+    }
+
+    if (infrastructurePackages.has(dependency)) {
+      if (capability) {
+        addViolation(
+          violations,
+          ARCHITECTURE_CODES.CAPABILITY_INFRASTRUCTURE_LEAK,
+          `${module.name} declares infrastructure dependency ${dependency}`,
+        );
+      } else if (
+        layer === 'backend' ||
+        (module.group === 'apps' && (module.name === 'api' || module.name === 'worker'))
+      ) {
+        addViolation(
+          violations,
+          ARCHITECTURE_CODES.DOMAIN_INFRASTRUCTURE_LEAK,
+          `${module.name} declares infrastructure dependency ${dependency}`,
+        );
+      }
+    }
   }
 
   for (const file of files) {
     const filePath = sourcePath(file);
-    const imports = parseImports(file.content, filePath);
+    const imports = parseImportReferences(file.content, filePath);
 
-    for (const specifier of imports) {
+    for (const reference of imports) {
+      const { specifier } = reference;
       const target = internalTarget(specifier);
 
       if (
@@ -331,29 +505,30 @@ export function analyzeModule({ module, manifest, packageJson, files }) {
         continue;
       }
 
-      if (isDeepImportSpecifier(specifier)) {
+      if (specifier.startsWith('.')) {
+        analyzeRelativeReference({
+          module,
+          filePath,
+          specifier,
+          workspaceModules,
+          layer,
+          violations,
+        });
+        continue;
+      }
+
+      if (packageSpecifier(specifier)?.subpath !== undefined) {
         addViolation(
           violations,
           ARCHITECTURE_CODES.DEEP_IMPORT,
-          `${filePath} imports internal module path ${specifier}`,
+          `${filePath} imports non-root package subpath ${specifier}`,
         );
         continue;
       }
 
       if (target !== undefined) {
         const importedLayer = targetLayer(target);
-        const forbiddenLayerDirection =
-          (layer === 'frontend' &&
-            (importedLayer === 'backend' || importedLayer === 'infrastructure')) ||
-          (layer === 'backend' && importedLayer === 'frontend') ||
-          (layer === 'shared' && importedLayer !== 'shared') ||
-          (layer === 'infrastructure' && importedLayer === 'frontend') ||
-          (module.group === 'apps' &&
-            module.name === 'web' &&
-            (importedLayer === 'backend' || importedLayer === 'infrastructure')) ||
-          (module.group === 'apps' &&
-            (module.name === 'api' || module.name === 'worker') &&
-            importedLayer === 'frontend');
+        const forbiddenLayerDirection = layerBoundary(layer, importedLayer, module);
 
         if (forbiddenLayerDirection) {
           addViolation(
@@ -523,6 +698,7 @@ export function analyzePublicApi({
   packageJson,
   indexSource,
   indexExists = true,
+  sourceFiles = [],
 }) {
   const violations = [];
 
@@ -546,7 +722,10 @@ export function analyzePublicApi({
   }
 
   const exportsObject = packageJson.exports ?? {};
-  const exportKeys = Object.keys(exportsObject).sort();
+  const exportKeys =
+    exportsObject !== null && typeof exportsObject === 'object'
+      ? Object.keys(exportsObject).sort()
+      : [];
   const manifestKeys = [...manifest.publicExports].sort();
   if (
     exportsObject['.'] === undefined ||
@@ -559,23 +738,90 @@ export function analyzePublicApi({
     );
   }
 
-  if (exportKeys.some((key) => key.includes('/internal'))) {
+  const exportTargets = [];
+  function collectTargets(value) {
+    if (typeof value === 'string') {
+      exportTargets.push(value);
+      return;
+    }
+    if (value !== null && typeof value === 'object') {
+      for (const nested of Object.values(value)) {
+        collectTargets(nested);
+      }
+    }
+  }
+  collectTargets(exportsObject);
+
+  if (
+    exportKeys.some((key) => key !== '.' || key.includes('*') || key.includes('/internal')) ||
+    manifestKeys.some((key) => key !== '.' || key.includes('*')) ||
+    exportTargets.some((target) => target.includes('*') || isInternalPath(target))
+  ) {
     addViolation(
       violations,
       ARCHITECTURE_CODES.INVALID_PUBLIC_EXPORT,
-      `${module.name} exposes an internal package entry`,
+      `${module.name} exposes an unsupported, wildcard, or internal package entry`,
     );
   }
 
-  if (parseExports(indexSource ?? '', 'src/index.ts').some(isDeepImportSpecifier)) {
-    addViolation(
-      violations,
-      ARCHITECTURE_CODES.INVALID_PUBLIC_EXPORT,
-      `${module.name} re-exports internal code from its public entry`,
-    );
+  const sourceMap = new Map();
+  sourceMap.set('src/index.ts', indexSource ?? '');
+  for (const file of sourceFiles) {
+    const filePath = normalizePath(sourcePath(file));
+    const root = moduleRoot(module);
+    const absolute = path.isAbsolute(filePath) ? filePath : path.resolve(repositoryRoot, filePath);
+    sourceMap.set(normalizePath(path.relative(root, absolute)), file.content);
+  }
+
+  const visited = new Set();
+  const queue = [{ file: 'src/index.ts', content: indexSource ?? '' }];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === undefined || visited.has(current.file)) {
+      continue;
+    }
+    visited.add(current.file);
+    for (const reference of parseImportReferences(current.content, current.file).filter(
+      (candidate) => candidate.kind === 'export',
+    )) {
+      if (!reference.specifier.startsWith('.')) {
+        if (isDeepImportSpecifier(reference.specifier)) {
+          addViolation(
+            violations,
+            ARCHITECTURE_CODES.INVALID_PUBLIC_EXPORT,
+            `${module.name} re-exports a non-root package entry from ${current.file}`,
+          );
+        }
+        continue;
+      }
+
+      if (isInternalPath(reference.specifier)) {
+        addViolation(
+          violations,
+          ARCHITECTURE_CODES.INVALID_PUBLIC_EXPORT,
+          `${module.name} re-exports internal code from its public entry`,
+        );
+        continue;
+      }
+
+      const target = resolveSourceMapPath(current.file, reference.specifier, sourceMap);
+      if (target !== undefined) {
+        queue.push({ file: target, content: sourceMap.get(target) ?? '' });
+      }
+    }
   }
 
   return violations;
+}
+
+function isInternalPath(specifier) {
+  return specifier.split('/').some((segment) => segment === 'internal');
+}
+
+function resolveSourceMapPath(currentFile, specifier, sourceMap) {
+  const base = path.posix.normalize(path.posix.join(path.posix.dirname(currentFile), specifier));
+  const candidates = [base, `${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}/index.ts`];
+  return candidates.find((candidate) => sourceMap.has(candidate));
 }
 
 const requiredProposalFields = [
@@ -616,59 +862,162 @@ export function isManifestPath(file) {
   return file.endsWith('/module.manifest.json') || file === 'module.manifest.json';
 }
 
-export function evaluateContractChanges({ files, proposals = [], workPackages = [] }) {
-  const violations = [];
-  const contractPaths = files.filter(isFrozenContractPath);
-  const manifestPaths = files.filter(isManifestPath);
+export function isControlledPackagePath(file) {
+  return /^(?:apps|packages)\/[^/]+(?:\/[^/]+)*\/package\.json$/u.test(file);
+}
 
+function isApprovedDocument(content) {
+  return /(?:^|\n)\s*-?\s*Status:\s*APPROVED\s*(?:\n|$)/iu.test(content ?? '');
+}
+
+function authorizationDocuments(documents, pattern) {
+  return documents.filter(
+    (document) => pattern.test(document.file) && isApprovedDocument(document.content),
+  );
+}
+
+export function extractAllowedWritePaths(content) {
+  const source = content ?? '';
+  const header = /^##\s+(?:Allowed implementation paths|Allowed write paths)\s*$/imu.exec(source);
+  if (header === null) {
+    return [];
+  }
+  const remainder = source.slice(header.index + header[0].length);
+  const nextHeading = /^##\s+/mu.exec(remainder);
+  return remainder
+    .slice(0, nextHeading?.index ?? remainder.length)
+    .split(/\r?\n/u)
+    .map((line) => line.trim().replaceAll('`', ''))
+    .filter((line) => line.startsWith('- '))
+    .map((line) => line.slice(2).trim())
+    .filter(Boolean);
+}
+
+function pathMatchesPattern(file, pattern) {
+  if (pattern === file) {
+    return true;
+  }
+  if (pattern.endsWith('/**')) {
+    return file.startsWith(pattern.slice(0, -3));
+  }
+  return false;
+}
+
+function approvedWorkPackage(documents) {
+  return authorizationDocuments(documents, /^docs\/work-packages\/WP-\d+[^/]*\.md$/u).sort(
+    (left, right) => left.file.localeCompare(right.file),
+  )[0];
+}
+
+function approvedArtifactForPath(documents, pattern, targetPath) {
+  return authorizationDocuments(documents, pattern).find((document) =>
+    isCurrentAuthorizationDocument({
+      file: document.file,
+      files: [document.file],
+      content: document.content,
+      targetPath,
+    }),
+  );
+}
+
+function entryPaths(entries = [], files = []) {
+  if (entries.length > 0) {
+    return [...new Set(entries.flatMap((entry) => entry.paths ?? []))];
+  }
+  return [...new Set(files)];
+}
+
+export function evaluateContractChanges({
+  files = [],
+  entries = [],
+  proposals = [],
+  baseDocuments,
+}) {
+  const violations = [];
+  const changedPaths = entryPaths(entries, files);
+  const contractPaths = changedPaths.filter(isFrozenContractPath);
+  const manifestPaths = changedPaths.filter(
+    (file) => isManifestPath(file) || isControlledPackagePath(file),
+  );
+  const authorizationSource = baseDocuments ?? [];
+  const wp = approvedWorkPackage(authorizationSource);
+  const allowedPaths = wp === undefined ? [] : extractAllowedWritePaths(wp.content);
+
+  if (baseDocuments !== undefined) {
+    const outOfScope = changedPaths.filter(
+      (file) => !allowedPaths.some((pattern) => pathMatchesPattern(file, pattern)),
+    );
+    if (outOfScope.length > 0) {
+      addViolation(
+        violations,
+        ARCHITECTURE_CODES.ARCHITECTURE_REVIEW_REQUIRED,
+        `changed paths are outside the approved BASE_SHA Work Package scope: ${outOfScope.join(', ')}`,
+      );
+    }
+  }
+
+  const baseContractAuthorization = contractPaths.every(
+    (contractPath) =>
+      approvedArtifactForPath(
+        authorizationSource,
+        /^docs\/contract-changes\/CCR-\d+\.md$/u,
+        contractPath,
+      ) !== undefined,
+  );
+  const currentContractAuthorization = contractPaths.every((contractPath) =>
+    proposals.some(
+      (proposal) =>
+        validateContractChangeProposal(proposal.file, proposal.content).length === 0 &&
+        isCurrentAuthorizationDocument({
+          file: proposal.file,
+          files: [proposal.file],
+          content: proposal.content,
+          targetPath: contractPath,
+        }),
+    ),
+  );
   const authorizedContractChange =
     contractPaths.length > 0 &&
-    mergeBaseAuthorization({
-      files,
-      documents: proposals.filter((proposal) =>
-        /^docs\/contract-changes\/CCR-\d+\.md$/u.test(proposal.file),
-      ),
-      targetPaths: contractPaths,
-      kind: 'ccr',
-    }) &&
-    contractPaths.every((contractPath) =>
-      proposals.some(
-        (proposal) =>
-          files.includes(proposal.file) &&
-          validateContractChangeProposal(proposal.file, proposal.content).length === 0 &&
-          mergeBaseAuthorization({
-            files,
-            documents: [proposal],
-            targetPaths: [contractPath],
-            kind: 'ccr',
-          }),
-      ),
-    );
-
-  const authorizedManifestChange =
-    manifestPaths.length > 0 &&
-    mergeBaseAuthorization({
-      files,
-      documents: workPackages.filter((document) =>
-        /^docs\/work-packages\/WP-\d+[^/]*\.md$/u.test(document.file),
-      ),
-      targetPaths: manifestPaths,
-      kind: 'wp',
-    });
+    (baseDocuments !== undefined ? baseContractAuthorization : false) &&
+    (baseDocuments === undefined ? currentContractAuthorization : true);
 
   if (contractPaths.length > 0 && !authorizedContractChange) {
     addViolation(
       violations,
       ARCHITECTURE_CODES.UNAUTHORIZED_CONTRACT_CHANGE,
-      'frozen Contract changed without a valid current-range CCR authorizing each changed path',
+      'frozen Contract changed without an approved BASE_SHA CCR authorizing each changed path',
     );
   }
 
-  if (manifestPaths.length > 0 && !authorizedManifestChange) {
+  const manifestScopeAuthorized =
+    manifestPaths.length === 0 ||
+    (wp !== undefined &&
+      manifestPaths.every((file) =>
+        allowedPaths.some((pattern) => pathMatchesPattern(file, pattern)),
+      ));
+  if (manifestPaths.length > 0 && !manifestScopeAuthorized) {
     addViolation(
       violations,
       ARCHITECTURE_CODES.ARCHITECTURE_REVIEW_REQUIRED,
-      'module.manifest.json changed without a current-range Work Package authorizing each changed manifest',
+      'Manifest or controlled package.json changed outside an approved BASE_SHA Work Package scope',
+    );
+  }
+
+  const architectureProtectedPaths = changedPaths.filter(
+    (file) => isManifestPath(file) || isControlledPackagePath(file),
+  );
+  if (
+    baseDocuments !== undefined &&
+    architectureProtectedPaths.some(
+      (file) =>
+        approvedArtifactForPath(authorizationSource, /^docs\/adr\/ADR-\d+[^/]*\.md$/u, file) ===
+        undefined,
+    )
+  ) {
+    addViolation(
+      violations,
+      ARCHITECTURE_CODES.ARCHITECTURE_REVIEW_REQUIRED,
+      'manifest or controlled package.json changes require an approved BASE_SHA ADR or Architecture Review',
     );
   }
 

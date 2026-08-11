@@ -1,0 +1,30 @@
+{
+  "kind": "module",
+  "expectedCode": "ARCH003",
+  "module": {
+    "group": "packages",
+    "relative": "frontend/fixture",
+    "name": "fixture",
+    "root": "C:/workspace/packages/frontend/fixture"
+  },
+  "manifest": {
+    "allowedDependencies": []
+  },
+  "workspaceModules": [
+    {
+      "group": "packages",
+      "relative": "frontend/fixture",
+      "name": "fixture",
+      "root": "C:/workspace/packages/frontend/fixture"
+    },
+    {
+      "group": "packages",
+      "relative": "backend/model-supply",
+      "name": "model-supply",
+      "root": "C:/workspace/packages/backend/model-supply"
+    }
+  ],
+  "files": {
+    "C:/workspace/packages/frontend/fixture/src/index.ts": "import { route } from '../../../backend/model-supply/src/router';\nexport { route };"
+  }
+}

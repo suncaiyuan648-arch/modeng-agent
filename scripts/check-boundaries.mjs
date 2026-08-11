@@ -9,8 +9,9 @@ import {
 } from './architecture-guard.mjs';
 
 const checkedModules = [];
+const workspaceModules = await listWorkspaceModules();
 
-for (const module of await listWorkspaceModules()) {
+for (const module of workspaceModules) {
   const manifest = await readJson(path.join(module.root, 'module.manifest.json'));
   const packageJson = await readJson(path.join(module.root, 'package.json'));
   const files = [];
@@ -22,7 +23,7 @@ for (const module of await listWorkspaceModules()) {
     });
   }
 
-  const violations = analyzeModule({ module, manifest, packageJson, files });
+  const violations = analyzeModule({ module, manifest, packageJson, files, workspaceModules });
   if (violations.length > 0) {
     throw violations[0];
   }

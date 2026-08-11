@@ -23,6 +23,13 @@ function moduleFiles(files = {}) {
   return Object.entries(files).map(([filePath, content]) => ({ path: filePath, content }));
 }
 
+function fixtureEntries(fixture) {
+  if (fixture.entries !== undefined) {
+    return fixture.entries;
+  }
+  return (fixture.files ?? []).map((file) => ({ status: 'M', paths: [file] }));
+}
+
 export function runFixture(fixture) {
   switch (fixture.kind) {
     case 'module':
@@ -31,6 +38,7 @@ export function runFixture(fixture) {
         manifest: fixture.manifest,
         packageJson: fixture.packageJson ?? {},
         files: moduleFiles(fixture.files),
+        workspaceModules: fixture.workspaceModules ?? [],
       });
     case 'public-api':
       return analyzePublicApi({
@@ -39,22 +47,40 @@ export function runFixture(fixture) {
         packageJson: fixture.packageJson ?? {},
         indexSource: fixture.indexSource ?? '',
         indexExists: fixture.indexExists ?? true,
+        sourceFiles: moduleFiles(fixture.sourceFiles),
       });
     case 'graph':
       return [findCircularDependencies(fixture.modules)].filter(Boolean);
     case 'contract':
       return evaluateContractChanges({
-        files: fixture.files ?? [],
+        entries: fixtureEntries(fixture),
         proposals: fixture.proposals ?? [],
-        workPackages: fixture.workPackages ?? [],
+        baseDocuments: fixture.baseDocuments,
       });
     default:
       throw new Error(`ARCH_FIXTURE_UNKNOWN unsupported fixture kind ${fixture.kind}`);
   }
 }
 
-export function evaluateFixtureResults(results) {
+export function evaluateFixtureResults(results, matrix = undefined) {
   const failures = [];
+  const invalidResults = results.filter((result) => result.category === 'invalid');
+  if (invalidResults.length === 0) {
+    failures.push('ARCH_FIXTURE_INVENTORY missing invalid architecture fixtures');
+  }
+  if (matrix !== undefined) {
+    for (const [code, requiredNames] of Object.entries(matrix)) {
+      for (const requiredName of requiredNames) {
+        const match = invalidResults.find(
+          (result) =>
+            path.basename(result.file, '.json') === requiredName && result.expectedCode === code,
+        );
+        if (match === undefined) {
+          failures.push(`ARCH_FIXTURE_INVENTORY ${code} requires invalid fixture ${requiredName}`);
+        }
+      }
+    }
+  }
   for (const result of results) {
     const codes = result.violations.map((violation) => violation.code);
     if (result.category === 'valid') {
@@ -75,6 +101,9 @@ export function evaluateFixtureResults(results) {
 
 export async function runArchitectureFixtures(root = fixtureRoot) {
   const results = [];
+  const matrix = JSON.parse(
+    await readFile(path.join(root, 'architecture-rule-matrix.json'), 'utf8'),
+  );
   for (const category of ['valid', 'invalid']) {
     const directory = path.join(root, category);
     for (const file of await fixtureFiles(directory)) {
@@ -88,7 +117,7 @@ export async function runArchitectureFixtures(root = fixtureRoot) {
     }
   }
 
-  const failures = evaluateFixtureResults(results);
+  const failures = evaluateFixtureResults(results, matrix);
   if (failures.length > 0) {
     throw new Error(failures.join('\n'));
   }

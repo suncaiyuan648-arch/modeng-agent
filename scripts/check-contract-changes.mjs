@@ -1,51 +1,63 @@
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-import {
-  computeChangeRange,
-  evaluateContractChanges,
-  validateContractChangeProposal,
-} from './architecture-guard.mjs';
+import { computeChangeRange, evaluateContractChanges } from './architecture-guard.mjs';
 import { repositoryRoot } from './repository.mjs';
 
-export async function readAuthorizationDocuments(files, root = repositoryRoot) {
+function defaultGit(args, root = repositoryRoot) {
+  return spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+}
+
+function gitOutput(result, description) {
+  if (result.status !== 0) {
+    throw new Error(`ARCH_GIT_RANGE ${description}: ${(result.stderr ?? '').trim()}`);
+  }
+  return result.stdout.trim();
+}
+
+export async function readBaseAuthorizationDocuments(baseRef, runGit = defaultGit) {
+  const tree = gitOutput(
+    runGit([
+      'ls-tree',
+      '-r',
+      '--name-only',
+      baseRef,
+      '--',
+      'docs/work-packages',
+      'docs/contract-changes',
+      'docs/adr',
+    ]),
+    `git ls-tree ${baseRef}`,
+  );
   const documents = [];
-  for (const file of files) {
-    if (!/^docs\/(?:contract-changes\/CCR-\d+|work-packages\/WP-\d+[^/]*)\.md$/u.test(file)) {
+  for (const file of tree.split(/\r?\n/u).filter(Boolean)) {
+    if (
+      !/^docs\/(?:work-packages\/WP-\d+[^/]*|contract-changes\/CCR-\d+|adr\/ADR-\d+[^/]*)\.md$/u.test(
+        file,
+      )
+    ) {
       continue;
     }
-    documents.push({ file, content: await readFile(path.join(root, file), 'utf8') });
+    const content = gitOutput(
+      runGit(['show', `${baseRef}:${file}`]),
+      `git show ${baseRef}:${file}`,
+    );
+    documents.push({ file: file.replaceAll('\\', '/'), content });
   }
   return documents;
 }
 
 export async function runContractChangeCheck({ env, runGit, root = repositoryRoot } = {}) {
-  const range = computeChangeRange({ env, runGit });
-  const documents = await readAuthorizationDocuments(range.files, root);
-  const proposals = documents.filter((document) =>
-    /^docs\/contract-changes\/CCR-\d+\.md$/u.test(document.file),
-  );
-  const workPackages = documents.filter((document) =>
-    /^docs\/work-packages\/WP-\d+[^/]*\.md$/u.test(document.file),
-  );
-
+  const gitRunner = runGit ?? ((args) => defaultGit(args, root));
+  const range = computeChangeRange({ env, runGit: gitRunner });
+  const baseDocuments = await readBaseAuthorizationDocuments(range.baseRef, gitRunner);
   const violations = evaluateContractChanges({
-    files: range.files,
-    proposals,
-    workPackages,
+    entries: range.entries,
+    baseDocuments,
   });
   if (violations.length > 0) {
     throw violations[0];
   }
-
-  const invalidProposal = proposals
-    .map((proposal) => validateContractChangeProposal(proposal.file, proposal.content))
-    .find((errors) => errors.length > 0);
-  if (invalidProposal !== undefined) {
-    throw new Error(`ARCH006 PUBLIC_CONTRACT_UNAUTHORIZED_CHANGE ${invalidProposal.join('; ')}`);
-  }
-
   return range;
 }
 

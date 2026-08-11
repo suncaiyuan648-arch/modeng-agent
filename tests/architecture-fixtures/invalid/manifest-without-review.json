@@ -1,5 +1,11 @@
 {
   "kind": "contract",
   "expectedCode": "ARCH011",
-  "files": ["packages/backend/task-engine/module.manifest.json"]
+  "files": ["packages/backend/task-engine/module.manifest.json"],
+  "baseDocuments": [
+    {
+      "file": "docs/work-packages/WP-002-architecture-guard.md",
+      "content": "# WP-002\n\n- Status: APPROVED\n\n## Allowed implementation paths\n- packages/backend/task-engine/module.manifest.json"
+    }
+  ]
 }

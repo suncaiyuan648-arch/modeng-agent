@@ -13,6 +13,8 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
