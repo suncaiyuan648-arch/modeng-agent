@@ -165,7 +165,7 @@ export function validateNormalWorkflow(workflow) {
 
 function declaredStringValues(source, declaration) {
   const body = new RegExp(
-    `(?:export\\s+)?const\\s+${declaration}\\s*=\\s*Object\\.freeze\\(([\\s\\S]*?)\\)`,
+    `export\\s+const\\s+${declaration}\\s*=\\s*Object\\.freeze\\(([\\s\\S]*?)\\)`,
     'u',
   ).exec(source)?.[1];
   return new Set([...(body ?? '').matchAll(/['"]([^'"]+)['"]/gu)].map((match) => match[1]));
