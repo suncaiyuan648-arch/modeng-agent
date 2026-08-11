@@ -5,6 +5,7 @@ const BASELINE_PATH = 'docs/governance/architecture-guard-baseline.json';
 const MATRIX_PATH = 'tests/architecture-fixtures/architecture-rule-matrix.json';
 const AGGREGATOR_PATH = 'scripts/check-architecture.mjs';
 const GUARD_PATH = 'scripts/architecture-guard.mjs';
+const TRUSTED_WORKFLOW_PATH = '.github/workflows/trusted-governance.yml';
 const REQUIRED_SUITE_PATHS = Object.freeze([
   'tests/architecture/architecture-guard.test.ts',
   MATRIX_PATH,
@@ -105,6 +106,48 @@ export function validateBaselineIntegrity(baseBaseline, headBaseline) {
   return failures;
 }
 
+export function validateFixtureMatrixIntegrity(baseMatrix, headMatrix) {
+  const failures = [];
+  for (const [rule, requiredFixtures] of Object.entries(baseMatrix ?? {})) {
+    const headFixtures = new Set(headMatrix?.[rule] ?? []);
+    if (!Array.isArray(headMatrix?.[rule])) {
+      failures.push(`TRUSTED_FIXTURE_RULE_MISSING ${rule}`);
+      continue;
+    }
+    for (const fixture of requiredFixtures) {
+      if (!headFixtures.has(fixture)) {
+        failures.push(`TRUSTED_FIXTURE_REMOVED ${rule}/${fixture}`);
+      }
+    }
+  }
+  return failures;
+}
+
+export function validateTrustedWorkflow(workflow) {
+  const failures = [];
+  if (!/pull_request_target:/u.test(workflow)) {
+    failures.push('TRUSTED_WORKFLOW_EVENT_MISSING pull_request_target');
+  }
+  if (!/ARCH_BASE_SHA:/u.test(workflow) || !/ARCH_HEAD_SHA:/u.test(workflow)) {
+    failures.push('TRUSTED_WORKFLOW_SHA_INPUT_MISSING ARCH_BASE_SHA/ARCH_HEAD_SHA');
+  }
+  if (!workflow.includes('node scripts/trusted-governance-check.mjs')) {
+    failures.push('TRUSTED_WORKFLOW_CHECKER_MISSING trusted-governance-check.mjs');
+  }
+  if (!/ref:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha\s*\}\}/u.test(workflow)) {
+    failures.push('TRUSTED_WORKFLOW_BASE_CHECKOUT_MISSING trusted base ref');
+  }
+  if (/ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/u.test(workflow)) {
+    failures.push('TRUSTED_WORKFLOW_UNTRUSTED_CHECKOUT PR head checkout is forbidden');
+  }
+  if (/(?:pnpm|npm|yarn)\s+(?:install|exec|test|run)\b/u.test(workflow)) {
+    failures.push(
+      'TRUSTED_WORKFLOW_PR_EXECUTION dependency installation or package execution is forbidden',
+    );
+  }
+  return failures;
+}
+
 function pathMatchesPattern(file, pattern) {
   const escaped = pattern.replace(/[.+?^${}()|[\]\\]/gu, '\\$&');
   const glob = escaped
@@ -164,11 +207,15 @@ export function validateTrustedHead({
   headFiles,
   headAggregator,
   headGuard,
+  baseMatrix,
   headMatrix,
+  headWorkflow,
   changedPaths,
   allowedPaths,
 }) {
   const failures = validateBaselineIntegrity(baseBaseline, headBaseline);
+  failures.push(...validateFixtureMatrixIntegrity(baseMatrix, headMatrix));
+  failures.push(...validateTrustedWorkflow(headWorkflow ?? ''));
   const headFileSet = new Set(headFiles);
 
   for (const path of REQUIRED_SUITE_PATHS) {
@@ -190,15 +237,9 @@ export function validateTrustedHead({
     }
   }
 
-  const baseMatrix = baseBaseline.mandatoryRuleIds.reduce((result, rule) => {
-    result[rule] = [];
-    return result;
-  }, {});
   const matrix = headMatrix ?? {};
-  for (const rule of Object.keys(baseMatrix)) {
-    if (!Array.isArray(matrix[rule])) {
-      failures.push(`TRUSTED_FIXTURE_RULE_MISSING ${rule}`);
-    }
+  for (const rule of baseBaseline.mandatoryRuleIds) {
+    if (!Array.isArray(matrix[rule])) failures.push(`TRUSTED_FIXTURE_RULE_MISSING ${rule}`);
   }
   for (const changedPath of changedPaths) {
     if (changedPath === BASELINE_PATH) {
@@ -233,6 +274,14 @@ export function runTrustedGovernanceCheck({ env = process.env, runGit = defaultG
     'HEAD baseline',
   );
   const headFiles = listTreeFiles(headRef, runGit);
+  const baseMatrix = parseJson(
+    readTreeFile(baseRef, MATRIX_PATH, runGit) ?? '{}',
+    'BASE fixture matrix',
+  );
+  const headMatrix = parseJson(
+    readTreeFile(headRef, MATRIX_PATH, runGit) ?? '{}',
+    'HEAD fixture matrix',
+  );
   const changed = gitOutput(
     runGit(['diff', '--name-status', '-M', '--diff-filter=ACMRD', baseRef, headRef]),
     `git diff ${baseRef} ${headRef}`,
@@ -246,10 +295,9 @@ export function runTrustedGovernanceCheck({ env = process.env, runGit = defaultG
     headFiles,
     headAggregator: readTreeFile(headRef, AGGREGATOR_PATH, runGit) ?? '',
     headGuard: readTreeFile(headRef, GUARD_PATH, runGit) ?? '',
-    headMatrix: parseJson(
-      readTreeFile(headRef, MATRIX_PATH, runGit) ?? '{}',
-      'HEAD fixture matrix',
-    ),
+    baseMatrix,
+    headMatrix,
+    headWorkflow: readTreeFile(headRef, TRUSTED_WORKFLOW_PATH, runGit) ?? '',
     changedPaths,
     allowedPaths,
   });

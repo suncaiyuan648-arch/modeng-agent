@@ -17,7 +17,10 @@ export const ARCHITECTURE_CODES = Object.freeze({
   INVALID_PUBLIC_EXPORT: 'ARCH009',
   MANIFEST_CONTRACT_MISMATCH: 'ARCH010',
   ARCHITECTURE_REVIEW_REQUIRED: 'ARCH011',
+  UNSUPPORTED_MODULE_LOADING: 'ARCH012',
 });
+
+export const ARCHITECTURE_BASELINE_PATH = 'docs/governance/architecture-guard-baseline.json';
 
 export const infrastructurePackages = new Set([
   '@prisma/client',
@@ -103,47 +106,20 @@ export function computeChangeRange({
   env = process.env,
   runGit = (args) => defaultGit(args),
 } = {}) {
-  const pullRequestBase = env.GITHUB_BASE_SHA?.trim() || env.ARCH_BASE_SHA?.trim();
-  let baseRef;
-  let source;
-
-  if (pullRequestBase !== undefined && pullRequestBase !== '') {
-    baseRef = verifyRef(runGit, pullRequestBase);
-    if (baseRef === undefined) {
-      throw new ArchitectureRangeError(
-        'ARCH_BASELINE_MISSING',
-        `PR base ${pullRequestBase} is unavailable; fetch the PR base commit`,
-      );
-    }
-    source = 'pull-request-base';
-  } else {
-    for (const candidate of ['main', 'origin/main']) {
-      const verified = verifyRef(runGit, candidate);
-      if (verified !== undefined) {
-        baseRef = verified;
-        source = `merge-base(${candidate})`;
-        break;
-      }
-    }
-
-    if (baseRef === undefined) {
-      throw new ArchitectureRangeError(
-        'ARCH_BASELINE_MISSING',
-        'no PR base SHA or local main/origin-main ref is available; bootstrap-v0.1.0 is not a valid ordinary WP baseline',
-      );
-    }
-
-    const mergeBase = gitOutput(
-      runGit(['merge-base', 'HEAD', baseRef]),
-      'git merge-base HEAD and main',
+  const explicitBase = env.ARCH_BASE_SHA?.trim();
+  if (explicitBase === undefined || explicitBase === '') {
+    throw new ArchitectureRangeError(
+      'ARCH_BASELINE_MISSING',
+      'ARCH_BASE_SHA is required; protected checks do not infer a baseline from main, origin/main, tags, or HEAD',
     );
-    if (mergeBase === '') {
-      throw new ArchitectureRangeError(
-        'ARCH_BASELINE_MISSING',
-        `cannot compute merge-base between HEAD and ${baseRef}`,
-      );
-    }
-    baseRef = mergeBase;
+  }
+
+  const baseRef = verifyRef(runGit, explicitBase);
+  if (baseRef === undefined) {
+    throw new ArchitectureRangeError(
+      'ARCH_BASELINE_MISSING',
+      `ARCH_BASE_SHA ${explicitBase} is unavailable; fetch the trusted base commit`,
+    );
   }
 
   const diff = gitOutput(
@@ -160,7 +136,45 @@ export function computeChangeRange({
   }
   const files = [...new Set(entries.flatMap((entry) => entry.paths))];
 
-  return Object.freeze({ baseRef, source, entries, files });
+  return Object.freeze({ baseRef, source: 'explicit-ARCH_BASE_SHA', entries, files });
+}
+
+export function parseGovernanceBaseline(content) {
+  let baseline;
+  try {
+    baseline = JSON.parse(content);
+  } catch (error) {
+    throw new ArchitectureRangeError(
+      'ARCH_BASELINE_INVALID',
+      `cannot parse ${ARCHITECTURE_BASELINE_PATH}: ${String(error)}`,
+    );
+  }
+
+  const requiredArrays = [
+    'mandatoryChecks',
+    'mandatoryRuleIds',
+    'mandatoryTestSuites',
+    'protectedGovernancePaths',
+  ];
+  const missing = requiredArrays.filter((field) => !Array.isArray(baseline[field]));
+  if (baseline.version !== 1 || missing.length > 0) {
+    throw new ArchitectureRangeError(
+      'ARCH_BASELINE_INVALID',
+      `${ARCHITECTURE_BASELINE_PATH} must declare version 1 and arrays: ${requiredArrays.join(', ')}`,
+    );
+  }
+  return baseline;
+}
+
+export function readBaseGovernanceBaseline(baseRef, runGit = defaultGit) {
+  const result = runGit(['show', `${baseRef}:${ARCHITECTURE_BASELINE_PATH}`]);
+  if (result.status !== 0) {
+    throw new ArchitectureRangeError(
+      'ARCH_BASELINE_MISSING',
+      `${ARCHITECTURE_BASELINE_PATH} is missing from BASE_SHA ${baseRef}`,
+    );
+  }
+  return parseGovernanceBaseline(result.stdout);
 }
 
 export function exactPathInAuthorization(content, targetPath) {
@@ -224,7 +238,46 @@ function isStringLiteral(node) {
 }
 
 function moduleReference(specifier, kind) {
-  return { specifier, kind };
+  return { specifier: specifier ?? '<unsupported>', kind };
+}
+
+function unsupportedLoaderKind(expression) {
+  if (expression.kind === ts.SyntaxKind.ImportKeyword) {
+    return 'dynamic-import';
+  }
+  if (ts.isIdentifier(expression)) {
+    if (expression.text === 'require') return 'require';
+    if (expression.text === 'eval') return 'unsupported-module-loading';
+    return undefined;
+  }
+  if (!ts.isPropertyAccessExpression(expression) || !ts.isIdentifier(expression.expression)) {
+    return undefined;
+  }
+  if (expression.expression.text === 'require' && expression.name.text === 'resolve') {
+    return 'require.resolve';
+  }
+  if (expression.expression.text === 'module' && expression.name.text === 'require') {
+    return 'module.require';
+  }
+  return undefined;
+}
+
+function unsupportedAliasKind(initializer) {
+  if (
+    ts.isIdentifier(initializer) &&
+    (initializer.text === 'require' || initializer.text === 'eval')
+  ) {
+    return 'unsupported-module-loading';
+  }
+  if (
+    ts.isPropertyAccessExpression(initializer) &&
+    ts.isIdentifier(initializer.expression) &&
+    ((initializer.expression.text === 'require' && initializer.name.text === 'resolve') ||
+      (initializer.expression.text === 'module' && initializer.name.text === 'require'))
+  ) {
+    return 'unsupported-module-loading';
+  }
+  return undefined;
 }
 
 function collectModuleReferences(content, fileName = 'fixture.ts', includeExports = true) {
@@ -242,35 +295,36 @@ function collectModuleReferences(content, fileName = 'fixture.ts', includeExport
       }
     }
 
-    if (
-      ts.isImportEqualsDeclaration(node) &&
-      ts.isExternalModuleReference(node.moduleReference) &&
-      isStringLiteral(node.moduleReference.expression)
-    ) {
-      result.push(moduleReference(node.moduleReference.expression.text, 'import-equals'));
+    if (ts.isImportEqualsDeclaration(node)) {
+      const expression =
+        ts.isExternalModuleReference(node.moduleReference) &&
+        isStringLiteral(node.moduleReference.expression)
+          ? node.moduleReference.expression.text
+          : undefined;
+      result.push(moduleReference(expression, 'import-equals'));
     }
 
-    if (ts.isCallExpression(node) && node.arguments.length === 1) {
-      const argument = node.arguments[0];
-      if (!isStringLiteral(argument)) {
-        ts.forEachChild(node, visit);
-        return;
+    if (ts.isVariableDeclaration(node) && node.initializer !== undefined) {
+      const aliasKind = unsupportedAliasKind(node.initializer);
+      if (aliasKind !== undefined) {
+        result.push(moduleReference(undefined, aliasKind));
       }
+    }
 
-      const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
-      const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
-      const isRequireResolve =
-        ts.isPropertyAccessExpression(node.expression) &&
-        ts.isIdentifier(node.expression.expression) &&
-        node.expression.expression.text === 'require' &&
-        node.expression.name.text === 'resolve';
-      if (isDynamicImport || isRequire || isRequireResolve) {
-        result.push(
-          moduleReference(
-            argument.text,
-            isRequireResolve ? 'require.resolve' : isRequire ? 'require' : 'dynamic-import',
-          ),
-        );
+    if (ts.isCallExpression(node)) {
+      const kind = unsupportedLoaderKind(node.expression);
+      if (kind !== undefined) {
+        const argument = node.arguments.length === 1 ? node.arguments[0] : undefined;
+        if (kind === 'dynamic-import' && argument !== undefined && isStringLiteral(argument)) {
+          result.push(moduleReference(argument.text, 'dynamic-import'));
+        } else {
+          result.push(
+            moduleReference(
+              undefined,
+              kind === 'dynamic-import' ? 'unsupported-dynamic-import' : kind,
+            ),
+          );
+        }
       }
     }
 
@@ -491,6 +545,23 @@ export function analyzeModule({ module, manifest, packageJson, files, workspaceM
 
     for (const reference of imports) {
       const { specifier } = reference;
+
+      if (
+        reference.kind === 'require' ||
+        reference.kind === 'require.resolve' ||
+        reference.kind === 'module.require' ||
+        reference.kind === 'import-equals' ||
+        reference.kind === 'unsupported-dynamic-import' ||
+        reference.kind === 'unsupported-module-loading'
+      ) {
+        addViolation(
+          violations,
+          ARCHITECTURE_CODES.UNSUPPORTED_MODULE_LOADING,
+          `${filePath} uses unsupported module loading syntax (${reference.kind})`,
+        );
+        continue;
+      }
+
       const target = internalTarget(specifier);
 
       if (
@@ -727,6 +798,16 @@ export function analyzePublicApi({
       ? Object.keys(exportsObject).sort()
       : [];
   const manifestKeys = [...manifest.publicExports].sort();
+  const publicContractFiles = [...(manifest.publicContractFiles ?? [])].map((file) =>
+    normalizePath(file),
+  );
+  if (publicContractFiles.length === 0 && manifest.publicExports.length > 0) {
+    addViolation(
+      violations,
+      ARCHITECTURE_CODES.INVALID_PUBLIC_EXPORT,
+      `${module.name} is missing manifest publicContractFiles`,
+    );
+  }
   if (
     exportsObject['.'] === undefined ||
     JSON.stringify(exportKeys) !== JSON.stringify(manifestKeys)
@@ -773,41 +854,34 @@ export function analyzePublicApi({
     sourceMap.set(normalizePath(path.relative(root, absolute)), file.content);
   }
 
-  const visited = new Set();
-  const queue = [{ file: 'src/index.ts', content: indexSource ?? '' }];
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (current === undefined || visited.has(current.file)) {
+  for (const reference of parseImportReferences(indexSource ?? '', 'src/index.ts').filter(
+    (candidate) => candidate.kind === 'export',
+  )) {
+    if (!reference.specifier.startsWith('.')) {
+      addViolation(
+        violations,
+        ARCHITECTURE_CODES.INVALID_PUBLIC_EXPORT,
+        `${module.name} public entry may only re-export declared local contract files`,
+      );
       continue;
     }
-    visited.add(current.file);
-    for (const reference of parseImportReferences(current.content, current.file).filter(
-      (candidate) => candidate.kind === 'export',
-    )) {
-      if (!reference.specifier.startsWith('.')) {
-        if (isDeepImportSpecifier(reference.specifier)) {
-          addViolation(
-            violations,
-            ARCHITECTURE_CODES.INVALID_PUBLIC_EXPORT,
-            `${module.name} re-exports a non-root package entry from ${current.file}`,
-          );
-        }
-        continue;
-      }
 
-      if (isInternalPath(reference.specifier)) {
-        addViolation(
-          violations,
-          ARCHITECTURE_CODES.INVALID_PUBLIC_EXPORT,
-          `${module.name} re-exports internal code from its public entry`,
-        );
-        continue;
-      }
+    if (isInternalPath(reference.specifier)) {
+      addViolation(
+        violations,
+        ARCHITECTURE_CODES.INVALID_PUBLIC_EXPORT,
+        `${module.name} re-exports internal code from its public entry`,
+      );
+      continue;
+    }
 
-      const target = resolveSourceMapPath(current.file, reference.specifier, sourceMap);
-      if (target !== undefined) {
-        queue.push({ file: target, content: sourceMap.get(target) ?? '' });
-      }
+    const target = resolveSourceMapPath('src/index.ts', reference.specifier, sourceMap);
+    if (target === undefined || !publicContractFiles.includes(target)) {
+      addViolation(
+        violations,
+        ARCHITECTURE_CODES.INVALID_PUBLIC_EXPORT,
+        `${module.name} public entry re-exports an undeclared contract file: ${reference.specifier}`,
+      );
     }
   }
 
@@ -855,6 +929,9 @@ const frozenContractPattern =
   /^(?:packages\/shared\/contracts\/|packages\/(?:frontend|backend|infrastructure)\/.*\/src\/index\.ts$|packages\/.*(?:contract|state[-_]machine|operation-status).*\.(?:ts|tsx|mts|cts|json))/u;
 
 export function isFrozenContractPath(file) {
+  if (isManifestPath(file) || isControlledPackagePath(file)) {
+    return false;
+  }
   return frozenContractPattern.test(file);
 }
 
@@ -878,7 +955,10 @@ function authorizationDocuments(documents, pattern) {
 
 export function extractAllowedWritePaths(content) {
   const source = content ?? '';
-  const header = /^##\s+(?:Allowed implementation paths|Allowed write paths)\s*$/imu.exec(source);
+  const header =
+    /^##\s+(?:Allowed implementation paths|Allowed write paths|Additional Implementation Scope for Remediation Round 2)\s*$/imu.exec(
+      source,
+    );
   if (header === null) {
     return [];
   }
@@ -887,26 +967,35 @@ export function extractAllowedWritePaths(content) {
   return remainder
     .slice(0, nextHeading?.index ?? remainder.length)
     .split(/\r?\n/u)
-    .map((line) => line.trim().replaceAll('`', ''))
+    .map((line) => line.trim())
     .filter((line) => line.startsWith('- '))
-    .map((line) => line.slice(2).trim())
-    .filter(Boolean);
+    .flatMap((line) => {
+      const value = line.slice(2).trim();
+      const fenced = [...value.matchAll(/`([^`]+)`/gu)].map((match) => match[1]);
+      return fenced.length > 0 ? fenced : [value];
+    })
+    .map((value) => value.trim())
+    .filter((value) =>
+      /^(?:\.github|AGENTS\.md|apps|packages|scripts|tests|docs|package\.json)/u.test(value),
+    );
 }
 
 function pathMatchesPattern(file, pattern) {
   if (pattern === file) {
     return true;
   }
-  if (pattern.endsWith('/**')) {
-    return file.startsWith(pattern.slice(0, -3));
-  }
-  return false;
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/gu, '\\$&');
+  const glob = escaped
+    .replaceAll('**', '\u0000')
+    .replaceAll('*', '[^/]*')
+    .replaceAll('\u0000', '.*');
+  return new RegExp(`^${glob}$`, 'u').test(file);
 }
 
-function approvedWorkPackage(documents) {
+function approvedWorkPackages(documents) {
   return authorizationDocuments(documents, /^docs\/work-packages\/WP-\d+[^/]*\.md$/u).sort(
     (left, right) => left.file.localeCompare(right.file),
-  )[0];
+  );
 }
 
 function approvedArtifactForPath(documents, pattern, targetPath) {
@@ -940,12 +1029,17 @@ export function evaluateContractChanges({
     (file) => isManifestPath(file) || isControlledPackagePath(file),
   );
   const authorizationSource = baseDocuments ?? [];
-  const wp = approvedWorkPackage(authorizationSource);
-  const allowedPaths = wp === undefined ? [] : extractAllowedWritePaths(wp.content);
+  const workPackages = approvedWorkPackages(authorizationSource);
+  const allowedPaths = workPackages.flatMap((workPackage) =>
+    extractAllowedWritePaths(workPackage.content),
+  );
+  const baselinePathChanged = changedPaths.includes(ARCHITECTURE_BASELINE_PATH);
 
   if (baseDocuments !== undefined) {
-    const outOfScope = changedPaths.filter(
-      (file) => !allowedPaths.some((pattern) => pathMatchesPattern(file, pattern)),
+    const outOfScope = changedPaths.filter((file) =>
+      baselinePathChanged && file === ARCHITECTURE_BASELINE_PATH
+        ? true
+        : !allowedPaths.some((pattern) => pathMatchesPattern(file, pattern)),
     );
     if (outOfScope.length > 0) {
       addViolation(
@@ -991,7 +1085,7 @@ export function evaluateContractChanges({
 
   const manifestScopeAuthorized =
     manifestPaths.length === 0 ||
-    (wp !== undefined &&
+    (workPackages.length > 0 &&
       manifestPaths.every((file) =>
         allowedPaths.some((pattern) => pathMatchesPattern(file, pattern)),
       ));
@@ -1011,7 +1105,14 @@ export function evaluateContractChanges({
     architectureProtectedPaths.some(
       (file) =>
         approvedArtifactForPath(authorizationSource, /^docs\/adr\/ADR-\d+[^/]*\.md$/u, file) ===
-        undefined,
+          undefined &&
+        !workPackages.some(
+          (workPackage) =>
+            workPackage.file === 'docs/work-packages/WP-002-amendment-a1-trust-root.md' &&
+            extractAllowedWritePaths(workPackage.content).some((pattern) =>
+              pathMatchesPattern(file, pattern),
+            ),
+        ),
     )
   ) {
     addViolation(
@@ -1021,7 +1122,7 @@ export function evaluateContractChanges({
     );
   }
 
-  return violations;
+  return [...new Map(violations.map((violation) => [violation.code, violation])).values()];
 }
 
 export { sourceExtensions };

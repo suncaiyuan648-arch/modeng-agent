@@ -9,6 +9,7 @@
   "readOnlyTables": [],
   "migrationScopes": [],
   "publicExports": ["."],
+  "publicContractFiles": ["src/index.ts"],
   "allowedDependencies": ["backend-resource-asset"],
   "forbiddenImports": ["**/internal/**"],
   "contracts": [],

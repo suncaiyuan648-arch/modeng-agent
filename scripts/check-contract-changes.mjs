@@ -1,7 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-import { computeChangeRange, evaluateContractChanges } from './architecture-guard.mjs';
+import {
+  computeChangeRange,
+  evaluateContractChanges,
+  readBaseGovernanceBaseline,
+} from './architecture-guard.mjs';
 import { repositoryRoot } from './repository.mjs';
 
 function defaultGit(args, root = repositoryRoot) {
@@ -50,6 +54,7 @@ export async function readBaseAuthorizationDocuments(baseRef, runGit = defaultGi
 export async function runContractChangeCheck({ env, runGit, root = repositoryRoot } = {}) {
   const gitRunner = runGit ?? ((args) => defaultGit(args, root));
   const range = computeChangeRange({ env, runGit: gitRunner });
+  readBaseGovernanceBaseline(range.baseRef, gitRunner);
   const baseDocuments = await readBaseAuthorizationDocuments(range.baseRef, gitRunner);
   const violations = evaluateContractChanges({
     entries: range.entries,

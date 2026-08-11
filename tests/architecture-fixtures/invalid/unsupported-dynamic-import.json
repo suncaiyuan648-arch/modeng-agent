@@ -1,0 +1,14 @@
+{
+  "kind": "module",
+  "expectedCode": "ARCH012",
+  "module": {
+    "group": "packages",
+    "relative": "backend/model-supply",
+    "name": "fixture"
+  },
+  "manifest": { "allowedDependencies": [] },
+  "packageJson": {},
+  "files": {
+    "packages/backend/model-supply/src/index.ts": "const path = './internal/debug'; const loaded = import(path);"
+  }
+}

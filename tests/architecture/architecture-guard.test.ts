@@ -13,10 +13,25 @@ import {
 // @ts-expect-error Fixture runner is executable ESM without a generated declaration file.
 import { evaluateFixtureResults } from '../../scripts/check-architecture-fixtures.mjs';
 // @ts-expect-error Aggregator is executable ESM without a generated declaration file.
-import { MANDATORY_CHECKS, validateMandatoryChecks } from '../../scripts/check-architecture.mjs';
+import {
+  MANDATORY_CHECKS,
+  validateBaselineRequirements,
+  validateMandatoryChecks,
+} from '../../scripts/check-architecture.mjs';
+// @ts-expect-error Trusted Governance check is executable ESM without a generated declaration file.
+import {
+  validateFixtureMatrixIntegrity,
+  validateBaselineIntegrity,
+  validateTrustedWorkflow,
+  validateTrustedHead,
+} from '../../scripts/trusted-governance-check.mjs';
 
 const codes = (violations: Array<{ code: string }>) =>
   violations.map((violation) => violation.code);
+const REQUIRED_TEST_PATHS = [
+  'tests/architecture/architecture-guard.test.ts',
+  'tests/architecture-fixtures/architecture-rule-matrix.json',
+];
 
 describe('Architecture Guard parser and path resolution', () => {
   it('extracts import, side-effect, type, export, dynamic import, require, resolve, and import-equals', () => {
@@ -38,8 +53,8 @@ describe('Architecture Guard parser and path resolution', () => {
       './internal',
       '../../model-supply/src/internal/router',
       './lazy',
-      './required',
-      './resolved',
+      '<unsupported>',
+      '<unsupported>',
       './legacy',
     ]);
     expect(parseImportReferences(source).map((reference) => reference.kind)).toEqual([
@@ -95,7 +110,7 @@ describe('Architecture Guard parser and path resolution', () => {
         packageJson: { dependencies: { '@modern-agent/backend-model-supply': 'workspace:*' } },
         files: [{ path: 'packages/backend/model-supply/src/index.ts', content: source }],
       });
-      expect(codes(violations)).toEqual(['ARCH001']);
+      expect(codes(violations)).toEqual(['ARCH012']);
     }
   });
 
@@ -161,7 +176,7 @@ describe('Architecture Guard regressions', () => {
   it('rejects internal named, star, target, wildcard, and transitive public exports', () => {
     const base = {
       module: { group: 'packages', relative: 'backend/model-supply', name: 'fixture' },
-      manifest: { publicExports: ['.'] },
+      manifest: { publicExports: ['.'], publicContractFiles: ['src/index.ts'] },
     };
     const cases = [
       {
@@ -196,6 +211,44 @@ describe('Architecture Guard regressions', () => {
       const violations = analyzePublicApi({ ...base, ...entry });
       expect(codes(violations)).toContain('ARCH009');
     }
+
+    expect(
+      codes(
+        analyzePublicApi({
+          ...base,
+          manifest: { publicExports: ['.'], publicContractFiles: ['src/contract.ts'] },
+          packageJson: { exports: { '.': './dist/index.js' } },
+          indexSource: "export * from './contract';",
+          sourceFiles: [
+            {
+              path: 'packages/backend/model-supply/src/contract.ts',
+              content: 'export const contract = true;',
+            },
+          ],
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('rejects unsupported module loading syntax with ARCH012', () => {
+    for (const source of [
+      "const loaded = require('./internal/debug');",
+      "import debug = require('./internal/debug');",
+      "const target = './internal/debug'; import(target);",
+      "const loaded = module.require('./internal/debug');",
+      "const load = require; load('./internal/debug');",
+      "const resolve = require.resolve; resolve('./internal/debug');",
+      "const load = module.require; load('./internal/debug');",
+      'const evaluate = eval; evaluate(\'require("./internal/debug")\');',
+    ]) {
+      const violations = analyzeModule({
+        module: { group: 'packages', relative: 'backend/model-supply', name: 'fixture' },
+        manifest: { allowedDependencies: [] },
+        packageJson: {},
+        files: [{ path: 'packages/backend/model-supply/src/index.ts', content: source }],
+      });
+      expect(codes(violations)).toEqual(['ARCH012']);
+    }
   });
 });
 
@@ -209,25 +262,20 @@ describe('Base-SHA authorization', () => {
         return { status: 0, stdout: 'R100 old/path.md new/path.md\nD\tremoved.md\n', stderr: '' };
       return { status: 1, stdout: '', stderr: '' };
     };
-    const range = computeChangeRange({ env: { GITHUB_BASE_SHA: 'pr-base' }, runGit });
+    const range = computeChangeRange({ env: { ARCH_BASE_SHA: 'pr-base' }, runGit });
     expect(range.files).toEqual(['old/path.md', 'new/path.md', 'removed.md']);
     expect(range.entries.map((entry) => entry.status)).toEqual(['R', 'D']);
     expect(calls.some((args) => args.includes('bootstrap-v0.1.0'))).toBe(false);
   });
 
-  it('uses local main before stale origin/main and computes merge-base', () => {
+  it('does not infer a baseline from local main or origin/main', () => {
+    const calls: string[][] = [];
     const runGit = (args: string[]) => {
-      if (args[0] === 'rev-parse' && args[2] === 'main^{commit}')
-        return { status: 0, stdout: 'main-sha\n', stderr: '' };
-      if (args[0] === 'rev-parse') return { status: 1, stdout: '', stderr: '' };
-      if (args[0] === 'merge-base') return { status: 0, stdout: 'merge-sha\n', stderr: '' };
-      if (args[0] === 'diff') return { status: 0, stdout: '', stderr: '' };
-      return { status: 1, stdout: '', stderr: '' };
+      calls.push(args);
+      return { status: 0, stdout: 'main-sha\n', stderr: '' };
     };
-    expect(computeChangeRange({ env: {}, runGit })).toMatchObject({
-      baseRef: 'merge-sha',
-      source: 'merge-base(main)',
-    });
+    expect(() => computeChangeRange({ env: {}, runGit })).toThrow('ARCH_BASELINE_MISSING');
+    expect(calls).toEqual([]);
   });
 
   it('fails closed when neither PR base nor local main refs are available', () => {
@@ -309,6 +357,74 @@ describe('Architecture inventory', () => {
       'check-architecture-fixtures.mjs',
     ]);
     expect(validateMandatoryChecks()).toBe(true);
+    expect(
+      validateBaselineRequirements({
+        mandatoryChecks: MANDATORY_CHECKS.map((check) => `scripts/${check}`),
+        mandatoryRuleIds: [
+          'ARCH001',
+          'ARCH002',
+          'ARCH003',
+          'ARCH004',
+          'ARCH005',
+          'ARCH006',
+          'ARCH007',
+          'ARCH008',
+          'ARCH009',
+          'ARCH010',
+          'ARCH011',
+          'ARCH012',
+        ],
+        mandatoryTestSuites: ['architecture-guard-unit'],
+      }),
+    ).toBe(true);
+  });
+
+  it('requires the BASE baseline inventory and rejects a weakened HEAD baseline', () => {
+    const base = {
+      mandatoryChecks: ['scripts/check-architecture-fixtures.mjs'],
+      mandatoryRuleIds: ['ARCH001'],
+      mandatoryTestSuites: ['architecture-fixture-integrity'],
+      protectedGovernancePaths: ['tests/architecture-fixtures/**'],
+      publicEntryPolicy: {
+        rootOnlyByDefault: true,
+        transitiveUndeclaredReExport: 'forbidden',
+      },
+      basePolicy: { missingBaseAction: 'fail-closed' },
+    };
+    const weakened = {
+      ...base,
+      mandatoryChecks: [],
+      mandatoryRuleIds: [],
+      mandatoryTestSuites: [],
+      protectedGovernancePaths: [],
+      publicEntryPolicy: { rootOnlyByDefault: false, transitiveUndeclaredReExport: 'allowed' },
+      basePolicy: { missingBaseAction: 'skip' },
+    };
+    expect(validateBaselineIntegrity(base, weakened)).toHaveLength(7);
+    expect(
+      validateTrustedHead({
+        baseBaseline: base,
+        headBaseline: base,
+        headFiles: ['scripts/check-architecture-fixtures.mjs', ...REQUIRED_TEST_PATHS],
+        headAggregator: 'check-architecture-fixtures.mjs',
+        headGuard: 'ARCH001',
+        baseMatrix: { ARCH001: ['fixture'] },
+        headMatrix: { ARCH001: ['fixture'] },
+        headWorkflow: `on:\n  pull_request_target:\n    - opened\nenv:\n  ARCH_BASE_SHA: base\n  ARCH_HEAD_SHA: head\n- uses: actions/checkout@v4\n  with:\n    ref: \${{ github.event.pull_request.base.sha }}\n- run: node scripts/trusted-governance-check.mjs`,
+        changedPaths: ['scripts/check-architecture-fixtures.mjs'],
+        allowedPaths: ['scripts/**'],
+      }),
+    ).toEqual([]);
+    expect(validateFixtureMatrixIntegrity({ ARCH001: ['fixture'] }, { ARCH001: [] })).toEqual([
+      'TRUSTED_FIXTURE_REMOVED ARCH001/fixture',
+    ]);
+    expect(validateTrustedWorkflow('on:\n  pull_request:\n- run: pnpm install')).toEqual([
+      'TRUSTED_WORKFLOW_EVENT_MISSING pull_request_target',
+      'TRUSTED_WORKFLOW_SHA_INPUT_MISSING ARCH_BASE_SHA/ARCH_HEAD_SHA',
+      'TRUSTED_WORKFLOW_CHECKER_MISSING trusted-governance-check.mjs',
+      'TRUSTED_WORKFLOW_BASE_CHECKOUT_MISSING trusted base ref',
+      'TRUSTED_WORKFLOW_PR_EXECUTION dependency installation or package execution is forbidden',
+    ]);
   });
 
   it('fails when invalid fixture inventory is empty', () => {

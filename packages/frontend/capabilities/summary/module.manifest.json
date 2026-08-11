@@ -9,6 +9,7 @@
   "readOnlyTables": [],
   "migrationScopes": [],
   "publicExports": ["."],
+  "publicContractFiles": ["src/index.ts"],
   "allowedDependencies": ["shared-contracts", "frontend-agent-ui"],
   "forbiddenImports": ["**/internal/**"],
   "contracts": [],
