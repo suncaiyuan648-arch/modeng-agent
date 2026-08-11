@@ -1,0 +1,46 @@
+{
+  "ARCH001": [
+    "cross-module-deep-import",
+    "deep-import-relative",
+    "deep-import-side-effect",
+    "package-subpath-deep-import"
+  ],
+  "ARCH002": ["forbidden-dependency"],
+  "ARCH003": [
+    "backend-imports-frontend",
+    "frontend-imports-backend",
+    "backend-imports-react",
+    "backend-imports-react-dom",
+    "backend-declares-react",
+    "relative-cross-layer-import"
+  ],
+  "ARCH004": ["backend-imports-infrastructure"],
+  "ARCH005": [
+    "capability-imports-bullmq",
+    "capability-imports-prisma",
+    "capability-imports-provider-sdk"
+  ],
+  "ARCH006": [
+    "unauthorized-contract-change",
+    "historical-ccr-cannot-authorize",
+    "unrelated-ccr-cannot-authorize"
+  ],
+  "ARCH007": ["unowned-table-write"],
+  "ARCH008": ["circular-dependency"],
+  "ARCH009": [
+    "invalid-public-export",
+    "public-export-named-internal",
+    "public-export-star-internal",
+    "public-export-internal-target",
+    "public-export-wildcard",
+    "public-export-transitive-internal"
+  ],
+  "ARCH010": ["manifest-contract-mismatch", "package-dependency-mismatch"],
+  "ARCH011": ["manifest-without-review", "historical-wp-cannot-authorize"],
+  "ARCH012": [
+    "unsupported-require",
+    "unsupported-import-equals",
+    "unsupported-dynamic-import",
+    "unsupported-loader-alias"
+  ]
+}

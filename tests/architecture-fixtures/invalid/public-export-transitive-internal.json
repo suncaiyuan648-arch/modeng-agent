@@ -1,0 +1,22 @@
+{
+  "kind": "public-api",
+  "expectedCode": "ARCH009",
+  "module": {
+    "group": "packages",
+    "relative": "backend/model-supply",
+    "name": "fixture"
+  },
+  "manifest": {
+    "publicExports": ["."],
+    "publicContractFiles": ["src/index.ts"]
+  },
+  "packageJson": {
+    "exports": {
+      ".": "./dist/index.js"
+    }
+  },
+  "indexSource": "export * from './bridge';",
+  "sourceFiles": {
+    "packages/backend/model-supply/src/bridge.ts": "export * from './internal/debug';"
+  }
+}

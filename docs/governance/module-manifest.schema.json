@@ -15,6 +15,7 @@
     "readOnlyTables",
     "migrationScopes",
     "publicExports",
+    "publicContractFiles",
     "allowedDependencies",
     "forbiddenImports",
     "contracts",
@@ -39,13 +40,7 @@
     },
     "kind": {
       "type": "string",
-      "enum": [
-        "deep-module",
-        "application",
-        "adapter",
-        "kernel",
-        "ui-module"
-      ]
+      "enum": ["deep-module", "application", "adapter", "kernel", "ui-module"]
     },
     "description": {
       "type": "string",
@@ -64,6 +59,9 @@
       "$ref": "#/$defs/uniqueStrings"
     },
     "publicExports": {
+      "$ref": "#/$defs/uniqueStrings"
+    },
+    "publicContractFiles": {
       "$ref": "#/$defs/uniqueStrings"
     },
     "allowedDependencies": {
@@ -93,11 +91,7 @@
     "fileZones": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "frozen",
-        "controlled",
-        "implementation"
-      ],
+      "required": ["frozen", "controlled", "implementation"],
       "properties": {
         "frozen": {
           "$ref": "#/$defs/uniqueStrings"
@@ -123,11 +117,7 @@
     "contract": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "name",
-        "owner",
-        "version"
-      ],
+      "required": ["name", "owner", "version"],
       "properties": {
         "name": {
           "type": "string",

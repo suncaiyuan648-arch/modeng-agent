@@ -1,0 +1,15 @@
+{
+  "kind": "contract",
+  "expectedCode": "ARCH006",
+  "files": ["packages/shared/contracts/src/index.ts"],
+  "baseDocuments": [
+    {
+      "file": "docs/work-packages/WP-002-architecture-guard.md",
+      "content": "- Status: APPROVED\n## Allowed implementation paths\n- packages/shared/contracts/src/index.ts"
+    },
+    {
+      "file": "docs/contract-changes/CCR-0002.md",
+      "content": "# CR-0002: Historical contract\n- Status: COMPLETED\n## Authorization\n- packages/shared/contracts/src/index.ts"
+    }
+  ]
+}

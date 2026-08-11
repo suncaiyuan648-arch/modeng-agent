@@ -1,0 +1,14 @@
+{
+  "kind": "graph",
+  "expectedCode": "ARCH008",
+  "modules": [
+    {
+      "manifest": { "name": "backend-alpha" },
+      "packageJson": { "dependencies": { "@modern-agent/backend-beta": "workspace:*" } }
+    },
+    {
+      "manifest": { "name": "backend-beta" },
+      "packageJson": { "dependencies": { "@modern-agent/backend-alpha": "workspace:*" } }
+    }
+  ]
+}

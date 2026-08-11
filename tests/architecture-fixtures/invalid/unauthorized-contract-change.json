@@ -1,0 +1,5 @@
+{
+  "kind": "contract",
+  "expectedCode": "ARCH006",
+  "files": ["packages/shared/contracts/src/index.ts"]
+}

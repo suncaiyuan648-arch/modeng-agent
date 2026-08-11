@@ -1,0 +1,15 @@
+{
+  "kind": "module",
+  "expectedCode": "ARCH003",
+  "module": {
+    "group": "packages",
+    "relative": "frontend/fixture",
+    "name": "fixture"
+  },
+  "manifest": {
+    "allowedDependencies": ["backend-task-engine"]
+  },
+  "files": {
+    "packages/frontend/fixture/src/index.ts": "import { BACKEND_TASK_ENGINE_MODULE } from '@modern-agent/backend-task-engine';\nexport { BACKEND_TASK_ENGINE_MODULE };"
+  }
+}

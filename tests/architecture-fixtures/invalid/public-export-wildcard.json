@@ -1,0 +1,20 @@
+{
+  "kind": "public-api",
+  "expectedCode": "ARCH009",
+  "module": {
+    "group": "packages",
+    "relative": "backend/model-supply",
+    "name": "fixture"
+  },
+  "manifest": {
+    "publicExports": [".", "./*"],
+    "publicContractFiles": ["src/index.ts"]
+  },
+  "packageJson": {
+    "exports": {
+      ".": "./dist/index.js",
+      "./*": "./dist/*"
+    }
+  },
+  "indexSource": "export const MODEL_SUPPLY_MODULE = 'model-supply';"
+}

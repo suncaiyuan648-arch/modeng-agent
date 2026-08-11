@@ -1,0 +1,15 @@
+{
+  "kind": "module",
+  "expectedCode": "ARCH003",
+  "module": {
+    "group": "packages",
+    "relative": "backend/fixture",
+    "name": "fixture"
+  },
+  "manifest": {
+    "allowedDependencies": ["frontend-agent-runtime"]
+  },
+  "files": {
+    "packages/backend/fixture/src/index.ts": "import { FRONTEND_AGENT_RUNTIME_MODULE } from '@modern-agent/frontend-agent-runtime';\nexport { FRONTEND_AGENT_RUNTIME_MODULE };"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "kind": "module",
+  "expectedCode": "ARCH004",
+  "module": {
+    "group": "packages",
+    "relative": "backend/task-engine",
+    "name": "fixture"
+  },
+  "manifest": {
+    "allowedDependencies": ["infrastructure-queue-bullmq"]
+  },
+  "files": {
+    "packages/backend/task-engine/src/index.ts": "import { QUEUE_BULLMQ_MODULE } from '@modern-agent/infrastructure-queue-bullmq';\nexport { QUEUE_BULLMQ_MODULE };"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "kind": "module",
+  "module": {
+    "group": "packages",
+    "relative": "backend/model-supply",
+    "name": "fixture"
+  },
+  "manifest": {
+    "allowedDependencies": []
+  },
+  "files": {
+    "packages/backend/model-supply/src/index.ts": "import { debug } from './internal/debug';\nexport { debug };"
+  }
+}
