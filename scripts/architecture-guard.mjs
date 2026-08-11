@@ -21,6 +21,8 @@ export const ARCHITECTURE_CODES = Object.freeze({
 });
 
 export const ARCHITECTURE_BASELINE_PATH = 'docs/governance/architecture-guard-baseline.json';
+export const EXECUTION_PLANNING_BOOTSTRAP_PATH =
+  'docs/governance/GOV-001-execution-planning-bootstrap.md';
 
 export const infrastructurePackages = new Set([
   '@prisma/client',
@@ -944,7 +946,28 @@ export function isControlledPackagePath(file) {
 }
 
 function isApprovedDocument(content) {
-  return /(?:^|\n)\s*-?\s*Status:\s*APPROVED\s*(?:\n|$)/iu.test(content ?? '');
+  return /(?:^|\n)\s*(?:>\s*)?-?\s*Status:\s*APPROVED\b/imu.test(content ?? '');
+}
+
+export function isPlanningOnlyPath(file) {
+  if (/^docs\/roadmap\//u.test(file)) {
+    return true;
+  }
+  if (file === 'docs/work-packages/README.md') {
+    return true;
+  }
+  const workPackageMatch = /^docs\/work-packages\/WP-(\d+)(?:[^/]*)\.md$/u.exec(file);
+  if (workPackageMatch !== null) {
+    return Number.parseInt(workPackageMatch[1], 10) >= 3;
+  }
+  return /^docs\/governance\/GOV-\d+[^/]*\.md$/u.test(file);
+}
+
+export function hasApprovedPlanningBootstrap(documents = []) {
+  return documents.some(
+    (document) =>
+      document.file === EXECUTION_PLANNING_BOOTSTRAP_PATH && isApprovedDocument(document.content),
+  );
 }
 
 function authorizationDocuments(documents, pattern) {
@@ -1034,12 +1057,20 @@ export function evaluateContractChanges({
     extractAllowedWritePaths(workPackage.content),
   );
   const baselinePathChanged = changedPaths.includes(ARCHITECTURE_BASELINE_PATH);
+  const planningOnlyChange =
+    changedPaths.length > 0 && changedPaths.every((file) => isPlanningOnlyPath(file));
+  const planningChangeAuthorized =
+    planningOnlyChange &&
+    baseDocuments !== undefined &&
+    hasApprovedPlanningBootstrap(baseDocuments);
 
   if (baseDocuments !== undefined) {
     const outOfScope = changedPaths.filter((file) =>
       baselinePathChanged && file === ARCHITECTURE_BASELINE_PATH
         ? true
-        : !allowedPaths.some((pattern) => pathMatchesPattern(file, pattern)),
+        : planningChangeAuthorized && isPlanningOnlyPath(file)
+          ? false
+          : !allowedPaths.some((pattern) => pathMatchesPattern(file, pattern)),
     );
     if (outOfScope.length > 0) {
       addViolation(

@@ -30,13 +30,14 @@ export async function readBaseAuthorizationDocuments(baseRef, runGit = defaultGi
       'docs/work-packages',
       'docs/contract-changes',
       'docs/adr',
+      'docs/governance',
     ]),
     `git ls-tree ${baseRef}`,
   );
   const documents = [];
   for (const file of tree.split(/\r?\n/u).filter(Boolean)) {
     if (
-      !/^docs\/(?:work-packages\/WP-\d+[^/]*|contract-changes\/CCR-\d+|adr\/ADR-\d+[^/]*)\.md$/u.test(
+      !/^docs\/(?:work-packages\/WP-\d+[^/]*|contract-changes\/CCR-\d+|adr\/ADR-\d+[^/]*|governance\/GOV-\d+[^/]*)\.md$/u.test(
         file,
       )
     ) {
