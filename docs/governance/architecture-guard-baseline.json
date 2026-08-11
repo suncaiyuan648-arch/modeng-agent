@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": 1,
+  "policy": "wp-002-architecture-guard-trust-root",
+  "mandatoryChecks": [
+    "scripts/check-module-manifest.mjs",
+    "scripts/check-boundaries.mjs",
+    "scripts/check-public-api.mjs",
+    "scripts/check-contract-changes.mjs",
+    "scripts/check-architecture-fixtures.mjs"
+  ],
+  "mandatoryRuleIds": [
+    "ARCH001",
+    "ARCH002",
+    "ARCH003",
+    "ARCH004",
+    "ARCH005",
+    "ARCH006",
+    "ARCH007",
+    "ARCH008",
+    "ARCH009",
+    "ARCH010",
+    "ARCH011",
+    "ARCH012"
+  ],
+  "mandatoryTestSuites": [
+    "architecture-guard-unit",
+    "architecture-authorization",
+    "architecture-public-api",
+    "architecture-fixture-integrity"
+  ],
+  "publicEntryPolicy": {
+    "rootOnlyByDefault": true,
+    "manifestField": "publicContractFiles",
+    "transitiveUndeclaredReExport": "forbidden"
+  },
+  "sourcePolicy": {
+    "roots": ["apps/**/src/**", "packages/**/src/**"],
+    "language": "typescript-esm",
+    "unsupportedModuleLoadingDiagnostic": "ARCH012"
+  },
+  "basePolicy": {
+    "environmentVariable": "ARCH_BASE_SHA",
+    "missingBaseAction": "fail-closed",
+    "localFallback": "forbidden"
+  },
+  "protectedGovernancePaths": [
+    "AGENTS.md",
+    ".github/workflows/**",
+    ".github/CODEOWNERS",
+    "docs/governance/architecture-guard-baseline.json",
+    "docs/governance/module-manifest.schema.json",
+    "docs/work-packages/WP-002-architecture-guard.md",
+    "docs/work-packages/WP-002-amendment-a1-trust-root.md",
+    "scripts/architecture-guard.mjs",
+    "scripts/check-architecture.mjs",
+    "scripts/check-architecture-fixtures.mjs",
+    "scripts/check-boundaries.mjs",
+    "scripts/check-public-api.mjs",
+    "scripts/check-contract-changes.mjs",
+    "scripts/trusted-governance-check.mjs",
+    "tests/architecture/**",
+    "tests/architecture-fixtures/**",
+    "tests/governance/**",
+    "package.json"
+  ]
+}
