@@ -6,6 +6,7 @@ const MATRIX_PATH = 'tests/architecture-fixtures/architecture-rule-matrix.json';
 const AGGREGATOR_PATH = 'scripts/check-architecture.mjs';
 const GUARD_PATH = 'scripts/architecture-guard.mjs';
 const TRUSTED_WORKFLOW_PATH = '.github/workflows/trusted-governance.yml';
+const NORMAL_WORKFLOW_PATH = '.github/workflows/ci.yml';
 const REQUIRED_SUITE_PATHS = Object.freeze([
   'tests/architecture/architecture-guard.test.ts',
   MATRIX_PATH,
@@ -148,6 +149,28 @@ export function validateTrustedWorkflow(workflow) {
   return failures;
 }
 
+export function validateNormalWorkflow(workflow) {
+  const failures = [];
+  if (!/pull_request:/u.test(workflow)) {
+    failures.push('TRUSTED_CI_EVENT_MISSING pull_request');
+  }
+  if (!workflow.includes('pnpm verify')) {
+    failures.push('TRUSTED_CI_GATE_MISSING pnpm verify');
+  }
+  if (!workflow.includes('ARCH_BASE_SHA:')) {
+    failures.push('TRUSTED_CI_BASE_INPUT_MISSING ARCH_BASE_SHA');
+  }
+  return failures;
+}
+
+function declaredStringValues(source, declaration) {
+  const body = new RegExp(
+    `(?:export\\s+)?const\\s+${declaration}\\s*=\\s*Object\\.freeze\\(([\\s\\S]*?)\\)`,
+    'u',
+  ).exec(source)?.[1];
+  return new Set([...(body ?? '').matchAll(/['"]([^'"]+)['"]/gu)].map((match) => match[1]));
+}
+
 function pathMatchesPattern(file, pattern) {
   const escaped = pattern.replace(/[.+?^${}()|[\]\\]/gu, '\\$&');
   const glob = escaped
@@ -210,13 +233,17 @@ export function validateTrustedHead({
   baseMatrix,
   headMatrix,
   headWorkflow,
+  headNormalWorkflow,
   changedPaths,
   allowedPaths,
 }) {
   const failures = validateBaselineIntegrity(baseBaseline, headBaseline);
   failures.push(...validateFixtureMatrixIntegrity(baseMatrix, headMatrix));
   failures.push(...validateTrustedWorkflow(headWorkflow ?? ''));
+  failures.push(...validateNormalWorkflow(headNormalWorkflow ?? ''));
   const headFileSet = new Set(headFiles);
+  const declaredChecks = declaredStringValues(headAggregator, 'MANDATORY_CHECKS');
+  const declaredRules = declaredStringValues(headGuard, 'ARCHITECTURE_CODES');
 
   for (const path of REQUIRED_SUITE_PATHS) {
     if (!headFileSet.has(path)) failures.push(`TRUSTED_TEST_MISSING ${path}`);
@@ -224,12 +251,12 @@ export function validateTrustedHead({
   for (const check of baseBaseline.mandatoryChecks) {
     const normalized = check.replace(/^scripts\//u, '');
     if (!headFileSet.has(check)) failures.push(`TRUSTED_CHECK_MISSING ${check}`);
-    if (!headAggregator.includes(normalized)) {
+    if (!declaredChecks.has(normalized)) {
       failures.push(`TRUSTED_CHECK_REMOVED ${normalized}`);
     }
   }
   for (const rule of baseBaseline.mandatoryRuleIds) {
-    if (!headGuard.includes(rule)) failures.push(`TRUSTED_RULE_REMOVED ${rule}`);
+    if (!declaredRules.has(rule)) failures.push(`TRUSTED_RULE_REMOVED ${rule}`);
   }
   for (const path of baseBaseline.protectedGovernancePaths) {
     if (!headFiles.some((file) => pathMatchesPattern(file, path))) {
@@ -298,6 +325,7 @@ export function runTrustedGovernanceCheck({ env = process.env, runGit = defaultG
     baseMatrix,
     headMatrix,
     headWorkflow: readTreeFile(headRef, TRUSTED_WORKFLOW_PATH, runGit) ?? '',
+    headNormalWorkflow: readTreeFile(headRef, NORMAL_WORKFLOW_PATH, runGit) ?? '',
     changedPaths,
     allowedPaths,
   });

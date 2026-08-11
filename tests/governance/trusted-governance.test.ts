@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   validateBaselineIntegrity,
   validateFixtureMatrixIntegrity,
+  validateNormalWorkflow,
   validateTrustedHead,
   validateTrustedWorkflow,
 } from '../../scripts/trusted-governance-check.mjs';
@@ -33,6 +34,8 @@ steps:
   - run: node scripts/trusted-governance-check.mjs
 `;
 
+const normalWorkflow = 'on:\n  pull_request:\nenv:\n  ARCH_BASE_SHA: base\n- run: pnpm verify';
+
 describe('trusted governance checks', () => {
   it('rejects weakened baseline and removed fixture inventory', () => {
     expect(
@@ -58,6 +61,7 @@ describe('trusted governance checks', () => {
     expect(validateTrustedWorkflow('on:\n  pull_request_target:\n- run: pnpm install')).toContain(
       'TRUSTED_WORKFLOW_PR_EXECUTION dependency installation or package execution is forbidden',
     );
+    expect(validateNormalWorkflow(normalWorkflow)).toEqual([]);
   });
 
   it('binds changed paths to base-approved scope', () => {
@@ -70,11 +74,13 @@ describe('trusted governance checks', () => {
         'tests/architecture/architecture-guard.test.ts',
         'tests/architecture-fixtures/architecture-rule-matrix.json',
       ],
-      headAggregator: 'check-architecture-fixtures.mjs',
-      headGuard: 'ARCH001',
+      headAggregator:
+        "export const MANDATORY_CHECKS = Object.freeze(['check-architecture-fixtures.mjs']);",
+      headGuard: "export const ARCHITECTURE_CODES = Object.freeze({ RULE: 'ARCH001' });",
       baseMatrix: { ARCH001: ['deep-import'] },
       headMatrix: { ARCH001: ['deep-import'] },
       headWorkflow: trustedWorkflow,
+      headNormalWorkflow: normalWorkflow,
       allowedPaths: ['scripts/**', 'tests/**'],
     };
     expect(

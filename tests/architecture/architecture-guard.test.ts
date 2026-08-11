@@ -22,6 +22,7 @@ import {
 import {
   validateFixtureMatrixIntegrity,
   validateBaselineIntegrity,
+  validateNormalWorkflow,
   validateTrustedWorkflow,
   validateTrustedHead,
 } from '../../scripts/trusted-governance-check.mjs';
@@ -406,11 +407,13 @@ describe('Architecture inventory', () => {
         baseBaseline: base,
         headBaseline: base,
         headFiles: ['scripts/check-architecture-fixtures.mjs', ...REQUIRED_TEST_PATHS],
-        headAggregator: 'check-architecture-fixtures.mjs',
-        headGuard: 'ARCH001',
+        headAggregator:
+          "export const MANDATORY_CHECKS = Object.freeze(['check-architecture-fixtures.mjs']);",
+        headGuard: "export const ARCHITECTURE_CODES = Object.freeze({ RULE: 'ARCH001' });",
         baseMatrix: { ARCH001: ['fixture'] },
         headMatrix: { ARCH001: ['fixture'] },
         headWorkflow: `on:\n  pull_request_target:\n    - opened\nenv:\n  ARCH_BASE_SHA: base\n  ARCH_HEAD_SHA: head\n- uses: actions/checkout@v4\n  with:\n    ref: \${{ github.event.pull_request.base.sha }}\n- run: node scripts/trusted-governance-check.mjs`,
+        headNormalWorkflow: 'on:\n  pull_request:\nenv:\n  ARCH_BASE_SHA: base\n- run: pnpm verify',
         changedPaths: ['scripts/check-architecture-fixtures.mjs'],
         allowedPaths: ['scripts/**'],
       }),
@@ -424,6 +427,10 @@ describe('Architecture inventory', () => {
       'TRUSTED_WORKFLOW_CHECKER_MISSING trusted-governance-check.mjs',
       'TRUSTED_WORKFLOW_BASE_CHECKOUT_MISSING trusted base ref',
       'TRUSTED_WORKFLOW_PR_EXECUTION dependency installation or package execution is forbidden',
+    ]);
+    expect(validateNormalWorkflow('on:\n  pull_request:\n- run: pnpm test')).toEqual([
+      'TRUSTED_CI_GATE_MISSING pnpm verify',
+      'TRUSTED_CI_BASE_INPUT_MISSING ARCH_BASE_SHA',
     ]);
   });
 
