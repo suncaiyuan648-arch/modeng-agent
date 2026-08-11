@@ -1,0 +1,24 @@
+{
+  "$schema": "../../../docs/governance/module-manifest.schema.json",
+  "schemaVersion": "1.0.0",
+  "name": "infrastructure-queue-bullmq",
+  "kind": "adapter",
+  "description": "BullMQ implementation behind Task Engine queue ports.",
+  "ownsState": [],
+  "ownsTables": [],
+  "readOnlyTables": [],
+  "migrationScopes": [],
+  "publicExports": ["."],
+  "allowedDependencies": ["backend-task-engine"],
+  "forbiddenImports": ["**/internal/**"],
+  "contracts": [],
+  "errorCodes": [],
+  "featureFlags": [],
+  "retentionPolicies": [],
+  "conformanceSuites": [],
+  "fileZones": {
+    "frozen": ["module.manifest.json"],
+    "controlled": ["src/index.ts", "package.json"],
+    "implementation": ["src/internal/**", "src/**/*.test.ts"]
+  }
+}

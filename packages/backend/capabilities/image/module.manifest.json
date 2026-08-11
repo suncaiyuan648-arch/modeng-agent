@@ -1,0 +1,30 @@
+{
+  "$schema": "../../../../docs/governance/module-manifest.schema.json",
+  "schemaVersion": "1.0.0",
+  "name": "backend-capability-image",
+  "kind": "application",
+  "description": "IMAGE handler plugin composed through backend public ports.",
+  "ownsState": [],
+  "ownsTables": [],
+  "readOnlyTables": [],
+  "migrationScopes": [],
+  "publicExports": ["."],
+  "allowedDependencies": [
+    "shared-contracts",
+    "backend-task-engine",
+    "backend-model-supply",
+    "backend-resource-asset",
+    "backend-billing-credits"
+  ],
+  "forbiddenImports": ["**/internal/**"],
+  "contracts": [],
+  "errorCodes": [],
+  "featureFlags": [],
+  "retentionPolicies": [],
+  "conformanceSuites": [],
+  "fileZones": {
+    "frozen": ["module.manifest.json"],
+    "controlled": ["src/index.ts", "package.json"],
+    "implementation": ["src/internal/**", "src/**/*.test.ts"]
+  }
+}

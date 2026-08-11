@@ -1,0 +1,40 @@
+{
+  "name": "modern-agent-platform",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22.13.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "dev:web": "pnpm --filter @modern-agent/web dev",
+    "dev:api": "pnpm --filter @modern-agent/api dev",
+    "dev:worker": "pnpm --filter @modern-agent/worker dev",
+    "format": "prettier --write apps packages scripts tests deploy prisma .github package.json pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs vitest.config.ts",
+    "format:check": "prettier --check apps packages scripts tests deploy prisma .github package.json pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs vitest.config.ts",
+    "lint": "eslint apps packages scripts vitest.config.ts --max-warnings 0",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "vitest run",
+    "architecture:check": "node scripts/check-architecture.mjs",
+    "verify:module": "node scripts/verify-module.mjs",
+    "verify:changed": "node scripts/verify-changed.mjs",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm architecture:check && pnpm build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitest/coverage-v8": "^4.1.10",
+    "ajv": "^8.20.0",
+    "eslint": "^10.8.1",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.10"
+  }
+}

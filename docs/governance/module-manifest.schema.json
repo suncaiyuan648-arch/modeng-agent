@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-platform.local/schemas/module-manifest.schema.json",
+  "title": "Agent Platform Module Manifest",
+  "description": "Machine-readable ownership, dependency and file-zone rules for one repository module.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "name",
+    "kind",
+    "description",
+    "ownsState",
+    "ownsTables",
+    "readOnlyTables",
+    "migrationScopes",
+    "publicExports",
+    "allowedDependencies",
+    "forbiddenImports",
+    "contracts",
+    "errorCodes",
+    "featureFlags",
+    "retentionPolicies",
+    "conformanceSuites",
+    "fileZones"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "pattern": "(^|/)module-manifest\\.schema\\.json$"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "deep-module",
+        "application",
+        "adapter",
+        "kernel",
+        "ui-module"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ownsState": {
+      "$ref": "#/$defs/uniqueStrings"
+    },
+    "ownsTables": {
+      "$ref": "#/$defs/uniqueStrings"
+    },
+    "readOnlyTables": {
+      "$ref": "#/$defs/uniqueStrings"
+    },
+    "migrationScopes": {
+      "$ref": "#/$defs/uniqueStrings"
+    },
+    "publicExports": {
+      "$ref": "#/$defs/uniqueStrings"
+    },
+    "allowedDependencies": {
+      "$ref": "#/$defs/uniqueStrings"
+    },
+    "forbiddenImports": {
+      "$ref": "#/$defs/uniqueStrings"
+    },
+    "contracts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/contract"
+      }
+    },
+    "errorCodes": {
+      "$ref": "#/$defs/uniqueStrings"
+    },
+    "featureFlags": {
+      "$ref": "#/$defs/uniqueStrings"
+    },
+    "retentionPolicies": {
+      "$ref": "#/$defs/uniqueStrings"
+    },
+    "conformanceSuites": {
+      "$ref": "#/$defs/uniqueStrings"
+    },
+    "fileZones": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "frozen",
+        "controlled",
+        "implementation"
+      ],
+      "properties": {
+        "frozen": {
+          "$ref": "#/$defs/uniqueStrings"
+        },
+        "controlled": {
+          "$ref": "#/$defs/uniqueStrings"
+        },
+        "implementation": {
+          "$ref": "#/$defs/uniqueStrings"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "uniqueStrings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "owner",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    }
+  }
+}

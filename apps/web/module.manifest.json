@@ -1,0 +1,24 @@
+{
+  "$schema": "../../docs/governance/module-manifest.schema.json",
+  "schemaVersion": "1.0.0",
+  "name": "web",
+  "kind": "application",
+  "description": "React/Vite platform shell composition root.",
+  "ownsState": [],
+  "ownsTables": [],
+  "readOnlyTables": [],
+  "migrationScopes": [],
+  "publicExports": [],
+  "allowedDependencies": [],
+  "forbiddenImports": ["**/internal/**"],
+  "contracts": [],
+  "errorCodes": [],
+  "featureFlags": [],
+  "retentionPolicies": [],
+  "conformanceSuites": [],
+  "fileZones": {
+    "frozen": ["module.manifest.json"],
+    "controlled": ["package.json"],
+    "implementation": ["src/**"]
+  }
+}

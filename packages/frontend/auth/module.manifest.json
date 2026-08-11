@@ -1,0 +1,24 @@
+{
+  "$schema": "../../../docs/governance/module-manifest.schema.json",
+  "schemaVersion": "1.0.0",
+  "name": "frontend-auth",
+  "kind": "ui-module",
+  "description": "Authentication and device-session browser interaction.",
+  "ownsState": [],
+  "ownsTables": [],
+  "readOnlyTables": [],
+  "migrationScopes": [],
+  "publicExports": ["."],
+  "allowedDependencies": ["shared-contracts"],
+  "forbiddenImports": ["**/internal/**"],
+  "contracts": [],
+  "errorCodes": [],
+  "featureFlags": [],
+  "retentionPolicies": [],
+  "conformanceSuites": [],
+  "fileZones": {
+    "frozen": ["module.manifest.json"],
+    "controlled": ["src/index.ts", "package.json"],
+    "implementation": ["src/internal/**", "src/**/*.test.ts"]
+  }
+}

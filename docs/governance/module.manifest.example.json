@@ -1,0 +1,75 @@
+{
+  "$schema": "./module-manifest.schema.json",
+  "schemaVersion": "1.0.0",
+  "name": "backend-billing-credits",
+  "kind": "deep-module",
+  "description": "Owns product quote, reservation, settlement and credit ledger.",
+  "ownsState": [
+    "BillingQuote",
+    "CreditReservation",
+    "BillingSettlement",
+    "CreditAccount",
+    "CreditLedger"
+  ],
+  "ownsTables": [
+    "billing_quote",
+    "billing_quote_line",
+    "credit_reservation",
+    "billing_settlement",
+    "credit_account",
+    "credit_ledger"
+  ],
+  "readOnlyTables": [],
+  "migrationScopes": [
+    "backend-billing-credits"
+  ],
+  "publicExports": [
+    "BillingQuotePort",
+    "CreditReservationPort",
+    "SettlementPort"
+  ],
+  "allowedDependencies": [
+    "shared-domain-kernel",
+    "backend-platform-core"
+  ],
+  "forbiddenImports": [
+    "@prisma/client",
+    "bullmq",
+    "@modern-agent/backend-model-supply/internal/**",
+    "@modern-agent/backend-capability-*/internal/**"
+  ],
+  "contracts": [
+    {
+      "name": "BillingQuotePort",
+      "owner": "backend-billing-credits",
+      "version": "1.0.0"
+    }
+  ],
+  "errorCodes": [
+    "BILLING_QUOTE_EXPIRED",
+    "INSUFFICIENT_CREDITS",
+    "BILLING_VERSION_CONFLICT"
+  ],
+  "featureFlags": [],
+  "retentionPolicies": [
+    "billing-financial-audit@1"
+  ],
+  "conformanceSuites": [
+    "BillingPortContractSuite@1"
+  ],
+  "fileZones": {
+    "frozen": [
+      "module.manifest.json",
+      "contract.ts"
+    ],
+    "controlled": [
+      "index.ts"
+    ],
+    "implementation": [
+      "internal/**",
+      "adapters/**",
+      "tests/**",
+      "testing/**"
+    ]
+  }
+}

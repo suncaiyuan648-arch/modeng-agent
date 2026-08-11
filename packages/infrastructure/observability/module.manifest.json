@@ -1,0 +1,24 @@
+{
+  "$schema": "../../../docs/governance/module-manifest.schema.json",
+  "schemaVersion": "1.0.0",
+  "name": "infrastructure-observability",
+  "kind": "adapter",
+  "description": "Logging, metrics and tracing adapters behind technical ports.",
+  "ownsState": [],
+  "ownsTables": [],
+  "readOnlyTables": [],
+  "migrationScopes": [],
+  "publicExports": ["."],
+  "allowedDependencies": ["backend-platform-core"],
+  "forbiddenImports": ["**/internal/**"],
+  "contracts": [],
+  "errorCodes": [],
+  "featureFlags": [],
+  "retentionPolicies": [],
+  "conformanceSuites": [],
+  "fileZones": {
+    "frozen": ["module.manifest.json"],
+    "controlled": ["src/index.ts", "package.json"],
+    "implementation": ["src/internal/**", "src/**/*.test.ts"]
+  }
+}
