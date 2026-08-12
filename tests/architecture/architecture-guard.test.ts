@@ -6,12 +6,16 @@ import {
   analyzePublicApi,
   computeChangeRange,
   evaluateContractChanges,
+  hasApprovedPlanningBootstrap,
   isDeepImportSpecifier,
+  isPlanningOnlyPath,
   parseImportReferences,
   parseImports,
 } from '../../scripts/architecture-guard.mjs';
 // @ts-expect-error Fixture runner is executable ESM without a generated declaration file.
 import { evaluateFixtureResults } from '../../scripts/check-architecture-fixtures.mjs';
+// @ts-expect-error Contract checker is executable ESM without a generated declaration file.
+import { readBaseAuthorizationDocuments } from '../../scripts/check-contract-changes.mjs';
 // @ts-expect-error Aggregator is executable ESM without a generated declaration file.
 import {
   MANDATORY_CHECKS,
@@ -345,6 +349,94 @@ describe('Base-SHA authorization', () => {
         }),
       ),
     ).toContain('ARCH011');
+  });
+
+  it('allows only planning paths after an approved GOV-001 bootstrap is in BASE_SHA', () => {
+    const bootstrap = {
+      file: 'docs/governance/GOV-001-execution-planning-bootstrap.md',
+      content: '> STATUS: APPROVED / GOVERNANCE BOOTSTRAP',
+    };
+    expect(hasApprovedPlanningBootstrap([bootstrap])).toBe(true);
+    expect(isPlanningOnlyPath('docs/roadmap/IMPLEMENTATION.md')).toBe(true);
+    expect(isPlanningOnlyPath('docs/work-packages/WP-003-contract-kernel.md')).toBe(true);
+    expect(isPlanningOnlyPath('docs/work-packages/WP-002-architecture-guard.md')).toBe(false);
+    expect(isPlanningOnlyPath('docs/governance/architecture-guard-baseline.json')).toBe(false);
+
+    expect(
+      evaluateContractChanges({
+        entries: [
+          {
+            status: 'A',
+            paths: [
+              'docs/roadmap/IMPLEMENTATION.md',
+              'docs/work-packages/WP-003-contract-kernel.md',
+            ],
+          },
+        ],
+        baseDocuments: [bootstrap],
+      }),
+    ).toEqual([]);
+  });
+
+  it('rejects planning paths without BASE authorization or mixed with implementation', () => {
+    const bootstrap = {
+      file: 'docs/governance/GOV-001-execution-planning-bootstrap.md',
+      content: '> STATUS: APPROVED / GOVERNANCE BOOTSTRAP',
+    };
+    expect(
+      codes(
+        evaluateContractChanges({
+          entries: [{ status: 'A', paths: ['docs/roadmap/IMPLEMENTATION.md'] }],
+          baseDocuments: [],
+        }),
+      ),
+    ).toContain('ARCH011');
+    expect(
+      codes(
+        evaluateContractChanges({
+          entries: [
+            {
+              status: 'A',
+              paths: ['docs/roadmap/IMPLEMENTATION.md', 'scripts/architecture-guard.mjs'],
+            },
+          ],
+          baseDocuments: [bootstrap],
+        }),
+      ),
+    ).toContain('ARCH011');
+  });
+
+  it('loads GOV planning authorization from BASE documents', async () => {
+    const runGit = (args: string[]) => {
+      if (args[0] === 'ls-tree') {
+        return {
+          status: 0,
+          stdout:
+            'docs/governance/GOV-001-execution-planning-bootstrap.md\n' +
+            'docs/work-packages/WP-003-contract-kernel.md\n',
+          stderr: '',
+        };
+      }
+      if (args[0] === 'show' && args[1]?.includes('GOV-001')) {
+        return {
+          status: 0,
+          stdout: '> STATUS: APPROVED / GOVERNANCE BOOTSTRAP',
+          stderr: '',
+        };
+      }
+      return { status: 0, stdout: '# WP-003\n- Status: APPROVED', stderr: '' };
+    };
+
+    await expect(readBaseAuthorizationDocuments('base', runGit)).resolves.toEqual([
+      {
+        file: 'docs/governance/GOV-001-execution-planning-bootstrap.md',
+        content: '> STATUS: APPROVED / GOVERNANCE BOOTSTRAP',
+      },
+      {
+        file: 'docs/work-packages/WP-003-contract-kernel.md',
+        content: '# WP-003\n- Status: APPROVED',
+      },
+    ]);
   });
 });
 
