@@ -998,21 +998,35 @@ export function extractAllowedWritePaths(content) {
       return fenced.length > 0 ? fenced : [value];
     })
     .map((value) => value.trim())
-    .filter((value) =>
-      /^(?:\.github|AGENTS\.md|apps|packages|scripts|tests|docs|package\.json)/u.test(value),
+    .filter(
+      (value) =>
+        /^(?:\.github|AGENTS\.md|apps|packages|scripts|tests|docs|package\.json)/u.test(value) ||
+        value === 'pnpm-lock.yaml',
     );
 }
 
-function pathMatchesPattern(file, pattern) {
+function segmentPatternToRegExp(segment) {
+  return segment.replace(/[.+?^${}()|[\]\\]/gu, '\\$&').replaceAll('*', '[^/]*');
+}
+
+export function pathMatchesPattern(file, pattern) {
   if (pattern === file) {
     return true;
   }
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/gu, '\\$&');
-  const glob = escaped
-    .replaceAll('**', '\u0000')
-    .replaceAll('*', '[^/]*')
-    .replaceAll('\u0000', '.*');
-  return new RegExp(`^${glob}$`, 'u').test(file);
+  const segments = pattern.split('/');
+  let glob = '^';
+  segments.forEach((segment, index) => {
+    const isLast = index === segments.length - 1;
+    if (segment === '**') {
+      glob += isLast ? '(?:[^/]+(?:/[^/]+)*)?' : '(?:[^/]+/)*';
+    } else {
+      glob += segmentPatternToRegExp(segment);
+      if (!isLast) {
+        glob += '/';
+      }
+    }
+  });
+  return new RegExp(`${glob}$`, 'u').test(file);
 }
 
 function approvedWorkPackages(documents) {
