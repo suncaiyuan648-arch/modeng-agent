@@ -8,6 +8,7 @@ import {
   evaluateContractChanges,
   extractAllowedWritePaths,
   hasApprovedPlanningBootstrap,
+  isFrozenContractPath,
   isDeepImportSpecifier,
   isPlanningOnlyPath,
   parseImportReferences,
@@ -260,6 +261,70 @@ describe('Architecture Guard regressions', () => {
 });
 
 describe('Base-SHA authorization', () => {
+  it('classifies only the shared-contracts root as frozen for WP-003 scope', () => {
+    expect(isFrozenContractPath('packages/shared/contracts/src/index.ts')).toBe(true);
+    expect(isFrozenContractPath('packages/shared/contracts/README.md')).toBe(false);
+    expect(isFrozenContractPath('packages/shared/contracts/src/index.test.ts')).toBe(false);
+    expect(isFrozenContractPath('packages/backend/task-engine/src/index.ts')).toBe(true);
+    expect(isFrozenContractPath('packages/backend/task-engine/src/task-contract.ts')).toBe(true);
+    expect(isFrozenContractPath('packages/backend/task-engine/src/index.test.ts')).toBe(false);
+  });
+
+  it('keeps WP-003 README and test paths scoped without weakening CCR authorization', () => {
+    const workPackage = {
+      file: 'docs/work-packages/WP-003-contract-kernel.md',
+      content:
+        '# WP-003\n\n- Status: APPROVED\n\n## Allowed write paths\n' +
+        '- `packages/shared/contracts/src/**/*.test.ts`\n' +
+        '- `packages/shared/contracts/README.md`\n' +
+        '- `packages/shared/contracts/src/index.ts`',
+    };
+    const ccr = {
+      file: 'docs/contract-changes/CCR-0001.md',
+      content:
+        '# CR-0001: WP-003 Contract Kernel\n\n' +
+        '- Contract owner: shared-contracts\n' +
+        '- Requested by: WP-003\n' +
+        '- Current version: 0.0.0\n' +
+        '- Proposed version: 1.0.0\n' +
+        '- Compatibility: breaking-major\n' +
+        '- Status: APPROVED\n\n' +
+        '## Authorization\n- packages/shared/contracts/src/index.ts\n\n' +
+        '## Problem\nProblem.\n\n' +
+        '## Proposed change\nChange.\n\n' +
+        '## Compatibility and affected modules\n- Consumers.\n\n' +
+        '## Fixtures and conformance\n- Fixture.\n\n' +
+        '## Migration / rollout / rollback\n- Rollout.',
+    };
+
+    expect(
+      evaluateContractChanges({
+        entries: [{ status: 'M', paths: ['packages/shared/contracts/README.md'] }],
+        baseDocuments: [workPackage],
+      }),
+    ).toEqual([]);
+    expect(
+      evaluateContractChanges({
+        entries: [{ status: 'M', paths: ['packages/shared/contracts/src/index.test.ts'] }],
+        baseDocuments: [workPackage],
+      }),
+    ).toEqual([]);
+    expect(
+      codes(
+        evaluateContractChanges({
+          entries: [{ status: 'M', paths: ['packages/shared/contracts/src/index.ts'] }],
+          baseDocuments: [workPackage],
+        }),
+      ),
+    ).toContain('ARCH006');
+    expect(
+      evaluateContractChanges({
+        entries: [{ status: 'M', paths: ['packages/shared/contracts/src/index.ts'] }],
+        baseDocuments: [workPackage, ccr],
+      }),
+    ).toEqual([]);
+  });
+
   it('authorizes explicit root lockfile and matches globstars without widening ordinary stars', () => {
     const workPackage = {
       file: 'docs/work-packages/WP-003-contract-kernel.md',
