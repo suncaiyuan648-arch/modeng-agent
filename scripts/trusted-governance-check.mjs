@@ -10,6 +10,8 @@ const PLANNING_ROADMAP_PATH = 'docs/roadmap/IMPLEMENTATION.md';
 const TRUSTED_WORKFLOW_PATH = '.github/workflows/trusted-governance.yml';
 const NORMAL_WORKFLOW_PATH = '.github/workflows/ci.yml';
 const CCR_PLANNING_PATH_PATTERN = /^docs\/contract-changes\/CCR-\d{4,}\.md$/u;
+const APPROVED_WORK_PACKAGE_STATUS_PATTERN =
+  /(?:^|\n)[ \t]*-?[ \t]*Status:[ \t]*(?:APPROVED \/ PLANNING RECORD|APPROVED)[ \t]*(?:\r?\n|$)/iu;
 const PLANNER_POLICY_PATHS = new Set([
   'docs/governance/work-package.template.md',
   'docs/work-packages/README.md',
@@ -202,10 +204,10 @@ export function pathMatchesPattern(file, pattern) {
   return new RegExp(`${glob}$`, 'u').test(file);
 }
 
-function extractAllowedPaths(documents) {
+export function extractAllowedPaths(documents) {
   const paths = [];
   for (const document of documents) {
-    if (!/(?:^|\n)\s*-?\s*Status:\s*APPROVED\s*(?:\n|$)/iu.test(document.content)) {
+    if (!APPROVED_WORK_PACKAGE_STATUS_PATTERN.test(document.content)) {
       continue;
     }
     const headings = [
