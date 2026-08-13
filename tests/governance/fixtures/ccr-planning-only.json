@@ -1,0 +1,11 @@
+{
+  "changedEntries": [
+    {
+      "status": "A",
+      "paths": ["docs/contract-changes/CCR-0006.md"]
+    }
+  ],
+  "baseFiles": ["docs/roadmap/IMPLEMENTATION.md"],
+  "basePlanningBootstrap": "> STATUS: APPROVED / GOVERNANCE BOOTSTRAP",
+  "expected": "pass"
+}
