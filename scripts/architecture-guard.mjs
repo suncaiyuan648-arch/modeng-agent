@@ -1032,6 +1032,12 @@ function approvedArtifactForPath(documents, pattern, targetPath) {
   );
 }
 
+function approvedWorkPackageAuthorizesPath(workPackages, targetPath) {
+  return workPackages.some((workPackage) =>
+    extractAllowedWritePaths(workPackage.content).some((pattern) => pattern === targetPath),
+  );
+}
+
 function entryPaths(entries = [], files = []) {
   if (entries.length > 0) {
     return [...new Set(entries.flatMap((entry) => entry.paths ?? []))];
@@ -1137,6 +1143,7 @@ export function evaluateContractChanges({
       (file) =>
         approvedArtifactForPath(authorizationSource, /^docs\/adr\/ADR-\d+[^/]*\.md$/u, file) ===
           undefined &&
+        !(isControlledPackagePath(file) && approvedWorkPackageAuthorizesPath(workPackages, file)) &&
         !workPackages.some(
           (workPackage) =>
             workPackage.file === 'docs/work-packages/WP-002-amendment-a1-trust-root.md' &&

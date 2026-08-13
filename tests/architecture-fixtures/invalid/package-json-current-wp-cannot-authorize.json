@@ -1,0 +1,14 @@
+{
+  "kind": "contract",
+  "expectedCode": "ARCH011",
+  "entries": [
+    {
+      "status": "A",
+      "paths": [
+        "docs/work-packages/WP-004-package-dependency.md",
+        "packages/shared/contracts/package.json"
+      ]
+    }
+  ],
+  "baseDocuments": []
+}
