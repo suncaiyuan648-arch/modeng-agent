@@ -6,11 +6,13 @@ import {
   analyzePublicApi,
   computeChangeRange,
   evaluateContractChanges,
+  extractAllowedWritePaths,
   hasApprovedPlanningBootstrap,
   isDeepImportSpecifier,
   isPlanningOnlyPath,
   parseImportReferences,
   parseImports,
+  pathMatchesPattern,
 } from '../../scripts/architecture-guard.mjs';
 // @ts-expect-error Fixture runner is executable ESM without a generated declaration file.
 import { evaluateFixtureResults } from '../../scripts/check-architecture-fixtures.mjs';
@@ -258,6 +260,65 @@ describe('Architecture Guard regressions', () => {
 });
 
 describe('Base-SHA authorization', () => {
+  it('authorizes explicit root lockfile and matches globstars without widening ordinary stars', () => {
+    const workPackage = {
+      file: 'docs/work-packages/WP-003-contract-kernel.md',
+      content:
+        '# WP-003\n\n- Status: APPROVED / PLANNING RECORD\n\n## Allowed write paths\n' +
+        '- `packages/shared/contracts/src/**/*.test.ts`\n' +
+        '- `pnpm-lock.yaml`',
+    };
+    const testPattern = 'packages/shared/contracts/src/**/*.test.ts';
+
+    expect(extractAllowedWritePaths(workPackage.content)).toEqual([testPattern, 'pnpm-lock.yaml']);
+    expect(pathMatchesPattern('packages/shared/contracts/src/index.test.ts', testPattern)).toBe(
+      true,
+    );
+    expect(pathMatchesPattern('packages/shared/contracts/src/foo/index.test.ts', testPattern)).toBe(
+      true,
+    );
+    expect(
+      pathMatchesPattern('packages/shared/contracts/src/foo/bar/index.test.ts', testPattern),
+    ).toBe(true);
+    expect(
+      pathMatchesPattern(
+        'packages/shared/contracts/src/foo/bar.test.ts',
+        'packages/shared/contracts/src/*.test.ts',
+      ),
+    ).toBe(false);
+
+    expect(
+      evaluateContractChanges({
+        entries: [{ status: 'M', paths: ['pnpm-lock.yaml'] }],
+        baseDocuments: [workPackage],
+      }),
+    ).toEqual([]);
+    expect(
+      codes(
+        evaluateContractChanges({
+          entries: [{ status: 'M', paths: ['unrelated-root.txt'] }],
+          baseDocuments: [workPackage],
+        }),
+      ),
+    ).toContain('ARCH011');
+    expect(
+      codes(
+        evaluateContractChanges({
+          entries: [{ status: 'M', paths: ['packages/shared/contracts/README.md'] }],
+          baseDocuments: [workPackage],
+        }),
+      ),
+    ).toContain('ARCH011');
+    expect(
+      codes(
+        evaluateContractChanges({
+          entries: [{ status: 'M', paths: [workPackage.file] }],
+          baseDocuments: [workPackage],
+        }),
+      ),
+    ).toContain('ARCH011');
+  });
+
   it('uses PR base and parses A/M/D/R status entries without bootstrap fallback', () => {
     const calls: string[][] = [];
     const runGit = (args: string[]) => {

@@ -11,6 +11,7 @@ import {
   validateNormalWorkflow,
   validateTrustedHead,
   validateTrustedWorkflow,
+  pathMatchesPattern as trustedPathMatchesPattern,
 } from '../../scripts/trusted-governance-check.mjs';
 
 const fixtureDirectory = resolve(dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -111,6 +112,25 @@ describe('trusted governance checks', () => {
         changedPaths: ['package.json'],
       }),
     ).toContain('TRUSTED_SCOPE_VIOLATION package.json');
+  });
+
+  it('matches globstars at zero or multiple directory levels without widening stars', () => {
+    const pattern = 'packages/shared/contracts/src/**/*.test.ts';
+    expect(trustedPathMatchesPattern('packages/shared/contracts/src/index.test.ts', pattern)).toBe(
+      true,
+    );
+    expect(
+      trustedPathMatchesPattern('packages/shared/contracts/src/foo/index.test.ts', pattern),
+    ).toBe(true);
+    expect(
+      trustedPathMatchesPattern('packages/shared/contracts/src/foo/bar/index.test.ts', pattern),
+    ).toBe(true);
+    expect(
+      trustedPathMatchesPattern(
+        'packages/shared/contracts/src/foo/bar.test.ts',
+        'packages/shared/contracts/src/*.test.ts',
+      ),
+    ).toBe(false);
   });
 
   it('passes a new WP planning record authorized by GOV-001 in BASE_SHA', () => {

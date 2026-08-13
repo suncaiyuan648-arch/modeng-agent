@@ -173,13 +173,28 @@ function declaredStringValues(source, declaration) {
   return new Set([...(body ?? '').matchAll(/['"]([^'"]+)['"]/gu)].map((match) => match[1]));
 }
 
-function pathMatchesPattern(file, pattern) {
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/gu, '\\$&');
-  const glob = escaped
-    .replaceAll('**', '\u0000')
-    .replaceAll('*', '[^/]*')
-    .replaceAll('\u0000', '.*');
-  return new RegExp(`^${glob}$`, 'u').test(file);
+function segmentPatternToRegExp(segment) {
+  return segment.replace(/[.+?^${}()|[\]\\]/gu, '\\$&').replaceAll('*', '[^/]*');
+}
+
+export function pathMatchesPattern(file, pattern) {
+  if (pattern === file) {
+    return true;
+  }
+  const segments = pattern.split('/');
+  let glob = '^';
+  segments.forEach((segment, index) => {
+    const isLast = index === segments.length - 1;
+    if (segment === '**') {
+      glob += isLast ? '(?:[^/]+(?:/[^/]+)*)?' : '(?:[^/]+/)*';
+    } else {
+      glob += segmentPatternToRegExp(segment);
+      if (!isLast) {
+        glob += '/';
+      }
+    }
+  });
+  return new RegExp(`${glob}$`, 'u').test(file);
 }
 
 function extractAllowedPaths(documents) {
@@ -204,7 +219,10 @@ function extractAllowedPaths(documents) {
         else if (line.trim().startsWith('- ')) {
           const value = line.trim().slice(2).trim();
           if (
-            /^(?:\.github|AGENTS\.md|apps|packages|scripts|tests|docs|package\.json)/u.test(value)
+            /^(?:\.github|AGENTS\.md|apps|packages|scripts|tests|docs|package\.json)/u.test(
+              value,
+            ) ||
+            value === 'pnpm-lock.yaml'
           ) {
             paths.push(value);
           }
