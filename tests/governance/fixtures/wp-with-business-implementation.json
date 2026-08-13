@@ -1,0 +1,15 @@
+{
+  "changedEntries": [
+    {
+      "status": "A",
+      "paths": ["docs/work-packages/WP-003-contract-kernel.md"]
+    },
+    {
+      "status": "M",
+      "paths": ["apps/api/src/main.ts"]
+    }
+  ],
+  "baseFiles": ["docs/roadmap/IMPLEMENTATION.md"],
+  "basePlanningBootstrap": "> STATUS: APPROVED / GOVERNANCE BOOTSTRAP",
+  "expected": "TRUSTED_SCOPE_VIOLATION apps/api/src/main.ts"
+}
