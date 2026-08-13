@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 // @ts-expect-error Trusted Governance is executable ESM without generated declarations.
@@ -8,6 +12,17 @@ import {
   validateTrustedHead,
   validateTrustedWorkflow,
 } from '../../scripts/trusted-governance-check.mjs';
+
+const fixtureDirectory = resolve(dirname(fileURLToPath(import.meta.url)), 'fixtures');
+
+function readFixture(name: string) {
+  return JSON.parse(readFileSync(resolve(fixtureDirectory, name), 'utf8')) as {
+    changedEntries: Array<{ status: string; paths: string[] }>;
+    baseFiles: string[];
+    basePlanningBootstrap: string;
+    expected: string;
+  };
+}
 
 const baseline = {
   mandatoryChecks: ['scripts/check-architecture-fixtures.mjs'],
@@ -35,6 +50,25 @@ steps:
 `;
 
 const normalWorkflow = 'on:\n  pull_request:\nenv:\n  ARCH_BASE_SHA: base\n- run: pnpm verify';
+
+const trustedHeadFixtureDefaults = {
+  baseBaseline: baseline,
+  headBaseline: baseline,
+  headFiles: [
+    'scripts/check-architecture-fixtures.mjs',
+    'tests/governance/trusted-governance.test.ts',
+    'tests/architecture/architecture-guard.test.ts',
+    'tests/architecture-fixtures/architecture-rule-matrix.json',
+  ],
+  headAggregator:
+    "export const MANDATORY_CHECKS = Object.freeze(['check-architecture-fixtures.mjs']);",
+  headGuard: "export const ARCHITECTURE_CODES = Object.freeze({ RULE: 'ARCH001' });",
+  baseMatrix: { ARCH001: ['deep-import'] },
+  headMatrix: { ARCH001: ['deep-import'] },
+  headWorkflow: trustedWorkflow,
+  headNormalWorkflow: normalWorkflow,
+  allowedPaths: ['scripts/**', 'tests/**'],
+};
 
 describe('trusted governance checks', () => {
   it('rejects weakened baseline and removed fixture inventory', () => {
@@ -65,32 +99,69 @@ describe('trusted governance checks', () => {
   });
 
   it('binds changed paths to base-approved scope', () => {
-    const common = {
-      baseBaseline: baseline,
-      headBaseline: baseline,
-      headFiles: [
-        'scripts/check-architecture-fixtures.mjs',
-        'tests/governance/trusted-governance.test.ts',
-        'tests/architecture/architecture-guard.test.ts',
-        'tests/architecture-fixtures/architecture-rule-matrix.json',
-      ],
-      headAggregator:
-        "export const MANDATORY_CHECKS = Object.freeze(['check-architecture-fixtures.mjs']);",
-      headGuard: "export const ARCHITECTURE_CODES = Object.freeze({ RULE: 'ARCH001' });",
-      baseMatrix: { ARCH001: ['deep-import'] },
-      headMatrix: { ARCH001: ['deep-import'] },
-      headWorkflow: trustedWorkflow,
-      headNormalWorkflow: normalWorkflow,
-      allowedPaths: ['scripts/**', 'tests/**'],
-    };
     expect(
       validateTrustedHead({
-        ...common,
+        ...trustedHeadFixtureDefaults,
         changedPaths: ['scripts/check-architecture-fixtures.mjs'],
       }),
     ).toEqual([]);
-    expect(validateTrustedHead({ ...common, changedPaths: ['package.json'] })).toContain(
-      'TRUSTED_SCOPE_VIOLATION package.json',
-    );
+    expect(
+      validateTrustedHead({
+        ...trustedHeadFixtureDefaults,
+        changedPaths: ['package.json'],
+      }),
+    ).toContain('TRUSTED_SCOPE_VIOLATION package.json');
+  });
+
+  it('passes a new WP planning record authorized by GOV-001 in BASE_SHA', () => {
+    const fixture = readFixture('planning-only-wp.json');
+    expect(
+      validateTrustedHead({
+        ...trustedHeadFixtureDefaults,
+        changedPaths: fixture.changedEntries.flatMap((entry) => entry.paths),
+        changedEntries: fixture.changedEntries,
+        baseFiles: fixture.baseFiles,
+        basePlanningBootstrap: fixture.basePlanningBootstrap,
+      }),
+    ).toEqual([]);
+  });
+
+  it('passes a necessary roadmap planning status update authorized by GOV-001', () => {
+    const fixture = readFixture('roadmap-status-update.json');
+    expect(
+      validateTrustedHead({
+        ...trustedHeadFixtureDefaults,
+        changedPaths: fixture.changedEntries.flatMap((entry) => entry.paths),
+        changedEntries: fixture.changedEntries,
+        baseFiles: fixture.baseFiles,
+        basePlanningBootstrap: fixture.basePlanningBootstrap,
+      }),
+    ).toEqual([]);
+  });
+
+  it('rejects a planning record combined with business implementation', () => {
+    const fixture = readFixture('wp-with-business-implementation.json');
+    expect(
+      validateTrustedHead({
+        ...trustedHeadFixtureDefaults,
+        changedPaths: fixture.changedEntries.flatMap((entry) => entry.paths),
+        changedEntries: fixture.changedEntries,
+        baseFiles: fixture.baseFiles,
+        basePlanningBootstrap: fixture.basePlanningBootstrap,
+      }),
+    ).toContain(fixture.expected);
+  });
+
+  it('rejects ordinary unauthorized governance widening', () => {
+    const fixture = readFixture('unauthorized-governance-widening.json');
+    expect(
+      validateTrustedHead({
+        ...trustedHeadFixtureDefaults,
+        changedPaths: fixture.changedEntries.flatMap((entry) => entry.paths),
+        changedEntries: fixture.changedEntries,
+        baseFiles: fixture.baseFiles,
+        basePlanningBootstrap: fixture.basePlanningBootstrap,
+      }),
+    ).toContain(fixture.expected);
   });
 });

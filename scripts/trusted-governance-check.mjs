@@ -5,6 +5,8 @@ const BASELINE_PATH = 'docs/governance/architecture-guard-baseline.json';
 const MATRIX_PATH = 'tests/architecture-fixtures/architecture-rule-matrix.json';
 const AGGREGATOR_PATH = 'scripts/check-architecture.mjs';
 const GUARD_PATH = 'scripts/architecture-guard.mjs';
+const PLANNING_BOOTSTRAP_PATH = 'docs/governance/GOV-001-execution-planning-bootstrap.md';
+const PLANNING_ROADMAP_PATH = 'docs/roadmap/IMPLEMENTATION.md';
 const TRUSTED_WORKFLOW_PATH = '.github/workflows/trusted-governance.yml';
 const NORMAL_WORKFLOW_PATH = '.github/workflows/ci.yml';
 const REQUIRED_SUITE_PATHS = Object.freeze([
@@ -224,6 +226,32 @@ function readBaseWorkPackageDocuments(baseRef, runGit) {
     .map((file) => ({ file, content: readTreeFile(baseRef, file, runGit) ?? '' }));
 }
 
+function isApprovedPlanningBootstrap(content) {
+  return /(?:^|\n)\s*(?:>\s*)?STATUS:\s*APPROVED\b/imu.test(content ?? '');
+}
+
+export function isNewPlanningWorkPackagePath(file) {
+  const match = /^docs\/work-packages\/WP-(\d{3,})-[^/]+\.md$/u.exec(file);
+  return match !== null && Number.parseInt(match[1], 10) >= 3;
+}
+
+function isPlanningCandidatePath(file) {
+  return isNewPlanningWorkPackagePath(file) || file === PLANNING_ROADMAP_PATH;
+}
+
+function isPlanningOnlyEntry(entry, baseFileSet) {
+  if (entry.status === 'A' && entry.paths.length === 1) {
+    const [file] = entry.paths;
+    return file !== undefined && isNewPlanningWorkPackagePath(file) && !baseFileSet.has(file);
+  }
+  return (
+    entry.status === 'M' &&
+    entry.paths.length === 1 &&
+    entry.paths[0] === PLANNING_ROADMAP_PATH &&
+    baseFileSet.has(PLANNING_ROADMAP_PATH)
+  );
+}
+
 export function validateTrustedHead({
   baseBaseline,
   headBaseline,
@@ -235,6 +263,9 @@ export function validateTrustedHead({
   headWorkflow,
   headNormalWorkflow,
   changedPaths,
+  changedEntries,
+  baseFiles = [],
+  basePlanningBootstrap,
   allowedPaths,
 }) {
   const failures = validateBaselineIntegrity(baseBaseline, headBaseline);
@@ -268,13 +299,44 @@ export function validateTrustedHead({
   for (const rule of baseBaseline.mandatoryRuleIds) {
     if (!Array.isArray(matrix[rule])) failures.push(`TRUSTED_FIXTURE_RULE_MISSING ${rule}`);
   }
-  for (const changedPath of changedPaths) {
-    if (changedPath === BASELINE_PATH) {
-      failures.push(`TRUSTED_BASELINE_CHANGED ${BASELINE_PATH}`);
-      continue;
-    }
-    if (!allowedPaths.some((pattern) => pathMatchesPattern(changedPath, pattern))) {
-      failures.push(`TRUSTED_SCOPE_VIOLATION ${changedPath}`);
+
+  const baseFileSet = new Set(baseFiles);
+  const entries =
+    changedEntries ??
+    changedPaths.map((path) => ({
+      status: baseFileSet.has(path) || path === PLANNING_ROADMAP_PATH ? 'M' : 'A',
+      paths: [path],
+    }));
+  const planningChangeDetected = entries.some((entry) =>
+    entry.paths.some((file) => isPlanningCandidatePath(file)),
+  );
+  const planningChangeAuthorized =
+    planningChangeDetected && isApprovedPlanningBootstrap(basePlanningBootstrap);
+
+  if (planningChangeDetected && !planningChangeAuthorized) {
+    failures.push(
+      `TRUSTED_PLANNING_AUTHORIZATION_MISSING ${PLANNING_BOOTSTRAP_PATH} must be approved in BASE_SHA`,
+    );
+  }
+
+  for (const entry of entries) {
+    for (const changedPath of entry.paths) {
+      if (changedPath === BASELINE_PATH) {
+        failures.push(`TRUSTED_BASELINE_CHANGED ${BASELINE_PATH}`);
+        continue;
+      }
+      const inAuthorizedPlanningChange =
+        planningChangeAuthorized && isPlanningOnlyEntry(entry, baseFileSet);
+      if (planningChangeDetected && !inAuthorizedPlanningChange) {
+        failures.push(`TRUSTED_SCOPE_VIOLATION ${changedPath}`);
+        continue;
+      }
+      if (
+        !planningChangeDetected &&
+        !allowedPaths.some((pattern) => pathMatchesPattern(changedPath, pattern))
+      ) {
+        failures.push(`TRUSTED_SCOPE_VIOLATION ${changedPath}`);
+      }
     }
   }
   return failures;
@@ -300,6 +362,7 @@ export function runTrustedGovernanceCheck({ env = process.env, runGit = defaultG
     readTreeFile(headRef, BASELINE_PATH, runGit) ?? '',
     'HEAD baseline',
   );
+  const baseFiles = listTreeFiles(baseRef, runGit);
   const headFiles = listTreeFiles(headRef, runGit);
   const baseMatrix = parseJson(
     readTreeFile(baseRef, MATRIX_PATH, runGit) ?? '{}',
@@ -313,7 +376,8 @@ export function runTrustedGovernanceCheck({ env = process.env, runGit = defaultG
     runGit(['diff', '--name-status', '-M', '--diff-filter=ACMRD', baseRef, headRef]),
     `git diff ${baseRef} ${headRef}`,
   );
-  const changedPaths = [...new Set(parseDiffEntries(changed).flatMap((entry) => entry.paths))];
+  const changedEntries = parseDiffEntries(changed);
+  const changedPaths = [...new Set(changedEntries.flatMap((entry) => entry.paths))];
   const documents = readBaseWorkPackageDocuments(baseRef, runGit);
   const allowedPaths = extractAllowedPaths(documents);
   const failures = validateTrustedHead({
@@ -327,6 +391,9 @@ export function runTrustedGovernanceCheck({ env = process.env, runGit = defaultG
     headWorkflow: readTreeFile(headRef, TRUSTED_WORKFLOW_PATH, runGit) ?? '',
     headNormalWorkflow: readTreeFile(headRef, NORMAL_WORKFLOW_PATH, runGit) ?? '',
     changedPaths,
+    changedEntries,
+    baseFiles,
+    basePlanningBootstrap: readTreeFile(baseRef, PLANNING_BOOTSTRAP_PATH, runGit),
     allowedPaths,
   });
   if (failures.length > 0) throw new Error(failures.join('\n'));
