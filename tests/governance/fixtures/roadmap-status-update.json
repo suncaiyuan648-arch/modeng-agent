@@ -1,0 +1,11 @@
+{
+  "changedEntries": [
+    {
+      "status": "M",
+      "paths": ["docs/roadmap/IMPLEMENTATION.md"]
+    }
+  ],
+  "baseFiles": ["docs/roadmap/IMPLEMENTATION.md"],
+  "basePlanningBootstrap": "> STATUS: APPROVED / GOVERNANCE BOOTSTRAP",
+  "expected": "pass"
+}

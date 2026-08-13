@@ -1,0 +1,11 @@
+{
+  "changedEntries": [
+    {
+      "status": "A",
+      "paths": ["docs/work-packages/WP-003-contract-kernel.md"]
+    }
+  ],
+  "baseFiles": ["docs/roadmap/IMPLEMENTATION.md"],
+  "basePlanningBootstrap": "> STATUS: APPROVED / GOVERNANCE BOOTSTRAP",
+  "expected": "pass"
+}
