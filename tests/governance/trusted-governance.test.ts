@@ -11,10 +11,12 @@ import {
   validateNormalWorkflow,
   validateTrustedHead,
   validateTrustedWorkflow,
+  extractAllowedPaths as extractTrustedAllowedPaths,
   pathMatchesPattern as trustedPathMatchesPattern,
 } from '../../scripts/trusted-governance-check.mjs';
 
 const fixtureDirectory = resolve(dirname(fileURLToPath(import.meta.url)), 'fixtures');
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 function readFixture(name: string) {
   return JSON.parse(readFileSync(resolve(fixtureDirectory, name), 'utf8')) as {
@@ -72,6 +74,43 @@ const trustedHeadFixtureDefaults = {
 };
 
 describe('trusted governance checks', () => {
+  it('accepts only the two approved Work Package statuses', () => {
+    const allowedPath = 'packages/shared/contracts/src/index.ts';
+    const documentForStatus = (status: string) => ({
+      content: `# WP-003\n\n- Status: ${status}\n\n## Allowed implementation paths\n- \`${allowedPath}\``,
+    });
+
+    expect(extractTrustedAllowedPaths([documentForStatus('APPROVED')])).toEqual([allowedPath]);
+    expect(extractTrustedAllowedPaths([documentForStatus('APPROVED / PLANNING RECORD')])).toEqual([
+      allowedPath,
+    ]);
+    expect(extractTrustedAllowedPaths([documentForStatus('COMPLETED')])).toEqual([]);
+    expect(
+      extractTrustedAllowedPaths([documentForStatus('APPROVED / GOVERNANCE BOOTSTRAP')]),
+    ).toEqual([]);
+  });
+
+  it('passes the actual WP-003 planning status and an approved implementation path', () => {
+    const planningRecordPath = 'docs/work-packages/WP-003-contract-kernel.md';
+    const implementationPath = 'packages/shared/contracts/src/index.ts';
+    const planningRecord = readFileSync(resolve(repositoryRoot, planningRecordPath), 'utf8');
+    const allowedPaths = extractTrustedAllowedPaths([
+      { file: planningRecordPath, content: planningRecord },
+    ]);
+
+    expect(planningRecord).toContain('- Status: APPROVED / PLANNING RECORD');
+    expect(allowedPaths).toContain(implementationPath);
+    expect(
+      validateTrustedHead({
+        ...trustedHeadFixtureDefaults,
+        changedPaths: [implementationPath],
+        changedEntries: [{ status: 'M', paths: [implementationPath] }],
+        baseFiles: [implementationPath, 'docs/roadmap/IMPLEMENTATION.md'],
+        allowedPaths,
+      }),
+    ).toEqual([]);
+  });
+
   it('rejects weakened baseline and removed fixture inventory', () => {
     expect(
       validateBaselineIntegrity(baseline, {
