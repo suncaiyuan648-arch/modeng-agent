@@ -23,6 +23,11 @@ export const ARCHITECTURE_CODES = Object.freeze({
 export const ARCHITECTURE_BASELINE_PATH = 'docs/governance/architecture-guard-baseline.json';
 export const EXECUTION_PLANNING_BOOTSTRAP_PATH =
   'docs/governance/GOV-001-execution-planning-bootstrap.md';
+const CCR_PLANNING_PATH_PATTERN = /^docs\/contract-changes\/CCR-\d{4,}\.md$/u;
+const PLANNER_POLICY_PATHS = new Set([
+  'docs/governance/work-package.template.md',
+  'docs/work-packages/README.md',
+]);
 
 export const infrastructurePackages = new Set([
   '@prisma/client',
@@ -953,6 +958,9 @@ export function isPlanningOnlyPath(file) {
   if (/^docs\/roadmap\//u.test(file)) {
     return true;
   }
+  if (CCR_PLANNING_PATH_PATTERN.test(file)) {
+    return true;
+  }
   if (file === 'docs/work-packages/README.md') {
     return true;
   }
@@ -961,6 +969,10 @@ export function isPlanningOnlyPath(file) {
     return Number.parseInt(workPackageMatch[1], 10) >= 3;
   }
   return /^docs\/governance\/GOV-\d+[^/]*\.md$/u.test(file);
+}
+
+function isPlannerPolicyPath(file) {
+  return PLANNER_POLICY_PATHS.has(file);
 }
 
 export function hasApprovedPlanningBootstrap(documents = []) {
@@ -1083,6 +1095,8 @@ export function evaluateContractChanges({
     planningOnlyChange &&
     baseDocuments !== undefined &&
     hasApprovedPlanningBootstrap(baseDocuments);
+  const planningBootstrapAuthorized =
+    baseDocuments !== undefined && hasApprovedPlanningBootstrap(baseDocuments);
 
   if (baseDocuments !== undefined) {
     const outOfScope = changedPaths.filter((file) =>
@@ -1090,7 +1104,9 @@ export function evaluateContractChanges({
         ? true
         : planningChangeAuthorized && isPlanningOnlyPath(file)
           ? false
-          : !allowedPaths.some((pattern) => pathMatchesPattern(file, pattern)),
+          : planningBootstrapAuthorized && isPlannerPolicyPath(file)
+            ? false
+            : !allowedPaths.some((pattern) => pathMatchesPattern(file, pattern)),
     );
     if (outOfScope.length > 0) {
       addViolation(

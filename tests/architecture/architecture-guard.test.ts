@@ -420,6 +420,8 @@ describe('Base-SHA authorization', () => {
     expect(hasApprovedPlanningBootstrap([bootstrap])).toBe(true);
     expect(isPlanningOnlyPath('docs/roadmap/IMPLEMENTATION.md')).toBe(true);
     expect(isPlanningOnlyPath('docs/work-packages/WP-003-contract-kernel.md')).toBe(true);
+    expect(isPlanningOnlyPath('docs/contract-changes/CCR-0006.md')).toBe(true);
+    expect(isPlanningOnlyPath('docs/contract-changes/CCR-not-numbered.md')).toBe(false);
     expect(isPlanningOnlyPath('docs/work-packages/WP-002-architecture-guard.md')).toBe(false);
     expect(isPlanningOnlyPath('docs/governance/architecture-guard-baseline.json')).toBe(false);
 
@@ -437,6 +439,28 @@ describe('Base-SHA authorization', () => {
         baseDocuments: [bootstrap],
       }),
     ).toEqual([]);
+
+    expect(
+      evaluateContractChanges({
+        entries: [{ status: 'A', paths: ['docs/contract-changes/CCR-0006.md'] }],
+        baseDocuments: [bootstrap],
+      }),
+    ).toEqual([]);
+
+    const approvedWp = {
+      file: 'docs/work-packages/WP-003-contract-kernel.md',
+      content:
+        '# WP-003\n\n- Status: APPROVED\n\n## Allowed write paths\n- ' +
+        'packages/shared/contracts/src/index.ts',
+    };
+    const mixedContractChange = evaluateContractChanges({
+      entries: [
+        { status: 'A', paths: ['docs/contract-changes/CCR-0006.md'] },
+        { status: 'M', paths: ['packages/shared/contracts/src/index.ts'] },
+      ],
+      baseDocuments: [bootstrap, approvedWp],
+    });
+    expect(codes(mixedContractChange)).toContain('ARCH006');
   });
 
   it('rejects planning paths without BASE authorization or mixed with implementation', () => {
