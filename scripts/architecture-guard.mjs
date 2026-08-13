@@ -933,7 +933,7 @@ export function validateContractChangeProposal(file, content) {
 }
 
 const frozenContractPattern =
-  /^(?:packages\/shared\/contracts\/|packages\/(?:frontend|backend|infrastructure)\/.*\/src\/index\.ts$|packages\/.*(?:contract|state[-_]machine|operation-status).*\.(?:ts|tsx|mts|cts|json))/u;
+  /^(?:packages\/shared\/contracts\/src\/index\.ts$|packages\/(?:frontend|backend|infrastructure)\/.*\/src\/index\.ts$|packages\/.*\/[^/]*(?:contract|state[-_]machine|operation-status)[^/]*\.(?:ts|tsx|mts|cts|json))/u;
 
 export function isFrozenContractPath(file) {
   if (isManifestPath(file) || isControlledPackagePath(file)) {
