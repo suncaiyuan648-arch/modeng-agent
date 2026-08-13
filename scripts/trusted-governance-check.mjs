@@ -9,6 +9,11 @@ const PLANNING_BOOTSTRAP_PATH = 'docs/governance/GOV-001-execution-planning-boot
 const PLANNING_ROADMAP_PATH = 'docs/roadmap/IMPLEMENTATION.md';
 const TRUSTED_WORKFLOW_PATH = '.github/workflows/trusted-governance.yml';
 const NORMAL_WORKFLOW_PATH = '.github/workflows/ci.yml';
+const CCR_PLANNING_PATH_PATTERN = /^docs\/contract-changes\/CCR-\d{4,}\.md$/u;
+const PLANNER_POLICY_PATHS = new Set([
+  'docs/governance/work-package.template.md',
+  'docs/work-packages/README.md',
+]);
 const REQUIRED_SUITE_PATHS = Object.freeze([
   'tests/architecture/architecture-guard.test.ts',
   MATRIX_PATH,
@@ -173,13 +178,28 @@ function declaredStringValues(source, declaration) {
   return new Set([...(body ?? '').matchAll(/['"]([^'"]+)['"]/gu)].map((match) => match[1]));
 }
 
-function pathMatchesPattern(file, pattern) {
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/gu, '\\$&');
-  const glob = escaped
-    .replaceAll('**', '\u0000')
-    .replaceAll('*', '[^/]*')
-    .replaceAll('\u0000', '.*');
-  return new RegExp(`^${glob}$`, 'u').test(file);
+function segmentPatternToRegExp(segment) {
+  return segment.replace(/[.+?^${}()|[\]\\]/gu, '\\$&').replaceAll('*', '[^/]*');
+}
+
+export function pathMatchesPattern(file, pattern) {
+  if (pattern === file) {
+    return true;
+  }
+  const segments = pattern.split('/');
+  let glob = '^';
+  segments.forEach((segment, index) => {
+    const isLast = index === segments.length - 1;
+    if (segment === '**') {
+      glob += isLast ? '(?:[^/]+(?:/[^/]+)*)?' : '(?:[^/]+/)*';
+    } else {
+      glob += segmentPatternToRegExp(segment);
+      if (!isLast) {
+        glob += '/';
+      }
+    }
+  });
+  return new RegExp(`${glob}$`, 'u').test(file);
 }
 
 function extractAllowedPaths(documents) {
@@ -204,7 +224,10 @@ function extractAllowedPaths(documents) {
         else if (line.trim().startsWith('- ')) {
           const value = line.trim().slice(2).trim();
           if (
-            /^(?:\.github|AGENTS\.md|apps|packages|scripts|tests|docs|package\.json)/u.test(value)
+            /^(?:\.github|AGENTS\.md|apps|packages|scripts|tests|docs|package\.json)/u.test(
+              value,
+            ) ||
+            value === 'pnpm-lock.yaml'
           ) {
             paths.push(value);
           }
@@ -235,14 +258,26 @@ export function isNewPlanningWorkPackagePath(file) {
   return match !== null && Number.parseInt(match[1], 10) >= 3;
 }
 
+export function isNewPlanningContractChangePath(file) {
+  return CCR_PLANNING_PATH_PATTERN.test(file);
+}
+
 function isPlanningCandidatePath(file) {
-  return isNewPlanningWorkPackagePath(file) || file === PLANNING_ROADMAP_PATH;
+  return (
+    isNewPlanningWorkPackagePath(file) ||
+    isNewPlanningContractChangePath(file) ||
+    file === PLANNING_ROADMAP_PATH
+  );
 }
 
 function isPlanningOnlyEntry(entry, baseFileSet) {
   if (entry.status === 'A' && entry.paths.length === 1) {
     const [file] = entry.paths;
-    return file !== undefined && isNewPlanningWorkPackagePath(file) && !baseFileSet.has(file);
+    return (
+      file !== undefined &&
+      (isNewPlanningWorkPackagePath(file) || isNewPlanningContractChangePath(file)) &&
+      !baseFileSet.has(file)
+    );
   }
   return (
     entry.status === 'M' &&
@@ -333,7 +368,8 @@ export function validateTrustedHead({
       }
       if (
         !planningChangeDetected &&
-        !allowedPaths.some((pattern) => pathMatchesPattern(changedPath, pattern))
+        !allowedPaths.some((pattern) => pathMatchesPattern(changedPath, pattern)) &&
+        !(entry.status === 'M' && entry.paths.length === 1 && PLANNER_POLICY_PATHS.has(changedPath))
       ) {
         failures.push(`TRUSTED_SCOPE_VIOLATION ${changedPath}`);
       }

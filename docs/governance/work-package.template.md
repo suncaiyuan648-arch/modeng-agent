@@ -10,6 +10,19 @@
 - ADR change：forbidden | allowed（ADR-XXXX）
 - Migration change：forbidden | allowed
 
+## Governance prerequisites
+
+Declare each prerequisite explicitly in every planning record. These are
+planning metadata only; this template change does not introduce an automatic
+prerequisite checker.
+
+- Frozen Contract touched：yes | no
+- CCR required：yes | no
+- ADR required：yes | no
+- Manifest change required：yes | no
+- Architecture change required：yes | no
+- State-machine change required：yes | no
+
 ## Goal
 
 一句话描述可验证结果。

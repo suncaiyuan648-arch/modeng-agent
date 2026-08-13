@@ -6,11 +6,14 @@ import {
   analyzePublicApi,
   computeChangeRange,
   evaluateContractChanges,
+  extractAllowedWritePaths,
   hasApprovedPlanningBootstrap,
+  isFrozenContractPath,
   isDeepImportSpecifier,
   isPlanningOnlyPath,
   parseImportReferences,
   parseImports,
+  pathMatchesPattern,
 } from '../../scripts/architecture-guard.mjs';
 // @ts-expect-error Fixture runner is executable ESM without a generated declaration file.
 import { evaluateFixtureResults } from '../../scripts/check-architecture-fixtures.mjs';
@@ -258,6 +261,129 @@ describe('Architecture Guard regressions', () => {
 });
 
 describe('Base-SHA authorization', () => {
+  it('classifies only the shared-contracts root as frozen for WP-003 scope', () => {
+    expect(isFrozenContractPath('packages/shared/contracts/src/index.ts')).toBe(true);
+    expect(isFrozenContractPath('packages/shared/contracts/README.md')).toBe(false);
+    expect(isFrozenContractPath('packages/shared/contracts/src/index.test.ts')).toBe(false);
+    expect(isFrozenContractPath('packages/backend/task-engine/src/index.ts')).toBe(true);
+    expect(isFrozenContractPath('packages/backend/task-engine/src/task-contract.ts')).toBe(true);
+    expect(isFrozenContractPath('packages/backend/task-engine/src/index.test.ts')).toBe(false);
+  });
+
+  it('keeps WP-003 README and test paths scoped without weakening CCR authorization', () => {
+    const workPackage = {
+      file: 'docs/work-packages/WP-003-contract-kernel.md',
+      content:
+        '# WP-003\n\n- Status: APPROVED\n\n## Allowed write paths\n' +
+        '- `packages/shared/contracts/src/**/*.test.ts`\n' +
+        '- `packages/shared/contracts/README.md`\n' +
+        '- `packages/shared/contracts/src/index.ts`',
+    };
+    const ccr = {
+      file: 'docs/contract-changes/CCR-0001.md',
+      content:
+        '# CR-0001: WP-003 Contract Kernel\n\n' +
+        '- Contract owner: shared-contracts\n' +
+        '- Requested by: WP-003\n' +
+        '- Current version: 0.0.0\n' +
+        '- Proposed version: 1.0.0\n' +
+        '- Compatibility: breaking-major\n' +
+        '- Status: APPROVED\n\n' +
+        '## Authorization\n- packages/shared/contracts/src/index.ts\n\n' +
+        '## Problem\nProblem.\n\n' +
+        '## Proposed change\nChange.\n\n' +
+        '## Compatibility and affected modules\n- Consumers.\n\n' +
+        '## Fixtures and conformance\n- Fixture.\n\n' +
+        '## Migration / rollout / rollback\n- Rollout.',
+    };
+
+    expect(
+      evaluateContractChanges({
+        entries: [{ status: 'M', paths: ['packages/shared/contracts/README.md'] }],
+        baseDocuments: [workPackage],
+      }),
+    ).toEqual([]);
+    expect(
+      evaluateContractChanges({
+        entries: [{ status: 'M', paths: ['packages/shared/contracts/src/index.test.ts'] }],
+        baseDocuments: [workPackage],
+      }),
+    ).toEqual([]);
+    expect(
+      codes(
+        evaluateContractChanges({
+          entries: [{ status: 'M', paths: ['packages/shared/contracts/src/index.ts'] }],
+          baseDocuments: [workPackage],
+        }),
+      ),
+    ).toContain('ARCH006');
+    expect(
+      evaluateContractChanges({
+        entries: [{ status: 'M', paths: ['packages/shared/contracts/src/index.ts'] }],
+        baseDocuments: [workPackage, ccr],
+      }),
+    ).toEqual([]);
+  });
+
+  it('authorizes explicit root lockfile and matches globstars without widening ordinary stars', () => {
+    const workPackage = {
+      file: 'docs/work-packages/WP-003-contract-kernel.md',
+      content:
+        '# WP-003\n\n- Status: APPROVED / PLANNING RECORD\n\n## Allowed write paths\n' +
+        '- `packages/shared/contracts/src/**/*.test.ts`\n' +
+        '- `pnpm-lock.yaml`',
+    };
+    const testPattern = 'packages/shared/contracts/src/**/*.test.ts';
+
+    expect(extractAllowedWritePaths(workPackage.content)).toEqual([testPattern, 'pnpm-lock.yaml']);
+    expect(pathMatchesPattern('packages/shared/contracts/src/index.test.ts', testPattern)).toBe(
+      true,
+    );
+    expect(pathMatchesPattern('packages/shared/contracts/src/foo/index.test.ts', testPattern)).toBe(
+      true,
+    );
+    expect(
+      pathMatchesPattern('packages/shared/contracts/src/foo/bar/index.test.ts', testPattern),
+    ).toBe(true);
+    expect(
+      pathMatchesPattern(
+        'packages/shared/contracts/src/foo/bar.test.ts',
+        'packages/shared/contracts/src/*.test.ts',
+      ),
+    ).toBe(false);
+
+    expect(
+      evaluateContractChanges({
+        entries: [{ status: 'M', paths: ['pnpm-lock.yaml'] }],
+        baseDocuments: [workPackage],
+      }),
+    ).toEqual([]);
+    expect(
+      codes(
+        evaluateContractChanges({
+          entries: [{ status: 'M', paths: ['unrelated-root.txt'] }],
+          baseDocuments: [workPackage],
+        }),
+      ),
+    ).toContain('ARCH011');
+    expect(
+      codes(
+        evaluateContractChanges({
+          entries: [{ status: 'M', paths: ['packages/shared/contracts/README.md'] }],
+          baseDocuments: [workPackage],
+        }),
+      ),
+    ).toContain('ARCH011');
+    expect(
+      codes(
+        evaluateContractChanges({
+          entries: [{ status: 'M', paths: [workPackage.file] }],
+          baseDocuments: [workPackage],
+        }),
+      ),
+    ).toContain('ARCH011');
+  });
+
   it('uses PR base and parses A/M/D/R status entries without bootstrap fallback', () => {
     const calls: string[][] = [];
     const runGit = (args: string[]) => {
@@ -359,6 +485,8 @@ describe('Base-SHA authorization', () => {
     expect(hasApprovedPlanningBootstrap([bootstrap])).toBe(true);
     expect(isPlanningOnlyPath('docs/roadmap/IMPLEMENTATION.md')).toBe(true);
     expect(isPlanningOnlyPath('docs/work-packages/WP-003-contract-kernel.md')).toBe(true);
+    expect(isPlanningOnlyPath('docs/contract-changes/CCR-0006.md')).toBe(true);
+    expect(isPlanningOnlyPath('docs/contract-changes/CCR-not-numbered.md')).toBe(false);
     expect(isPlanningOnlyPath('docs/work-packages/WP-002-architecture-guard.md')).toBe(false);
     expect(isPlanningOnlyPath('docs/governance/architecture-guard-baseline.json')).toBe(false);
 
@@ -376,6 +504,28 @@ describe('Base-SHA authorization', () => {
         baseDocuments: [bootstrap],
       }),
     ).toEqual([]);
+
+    expect(
+      evaluateContractChanges({
+        entries: [{ status: 'A', paths: ['docs/contract-changes/CCR-0006.md'] }],
+        baseDocuments: [bootstrap],
+      }),
+    ).toEqual([]);
+
+    const approvedWp = {
+      file: 'docs/work-packages/WP-003-contract-kernel.md',
+      content:
+        '# WP-003\n\n- Status: APPROVED\n\n## Allowed write paths\n- ' +
+        'packages/shared/contracts/src/index.ts',
+    };
+    const mixedContractChange = evaluateContractChanges({
+      entries: [
+        { status: 'A', paths: ['docs/contract-changes/CCR-0006.md'] },
+        { status: 'M', paths: ['packages/shared/contracts/src/index.ts'] },
+      ],
+      baseDocuments: [bootstrap, approvedWp],
+    });
+    expect(codes(mixedContractChange)).toContain('ARCH006');
   });
 
   it('rejects planning paths without BASE authorization or mixed with implementation', () => {

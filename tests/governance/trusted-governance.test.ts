@@ -11,6 +11,7 @@ import {
   validateNormalWorkflow,
   validateTrustedHead,
   validateTrustedWorkflow,
+  pathMatchesPattern as trustedPathMatchesPattern,
 } from '../../scripts/trusted-governance-check.mjs';
 
 const fixtureDirectory = resolve(dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -113,6 +114,25 @@ describe('trusted governance checks', () => {
     ).toContain('TRUSTED_SCOPE_VIOLATION package.json');
   });
 
+  it('matches globstars at zero or multiple directory levels without widening stars', () => {
+    const pattern = 'packages/shared/contracts/src/**/*.test.ts';
+    expect(trustedPathMatchesPattern('packages/shared/contracts/src/index.test.ts', pattern)).toBe(
+      true,
+    );
+    expect(
+      trustedPathMatchesPattern('packages/shared/contracts/src/foo/index.test.ts', pattern),
+    ).toBe(true);
+    expect(
+      trustedPathMatchesPattern('packages/shared/contracts/src/foo/bar/index.test.ts', pattern),
+    ).toBe(true);
+    expect(
+      trustedPathMatchesPattern(
+        'packages/shared/contracts/src/foo/bar.test.ts',
+        'packages/shared/contracts/src/*.test.ts',
+      ),
+    ).toBe(false);
+  });
+
   it('passes a new WP planning record authorized by GOV-001 in BASE_SHA', () => {
     const fixture = readFixture('planning-only-wp.json');
     expect(
@@ -124,6 +144,57 @@ describe('trusted governance checks', () => {
         basePlanningBootstrap: fixture.basePlanningBootstrap,
       }),
     ).toEqual([]);
+  });
+
+  it('passes a new CCR planning record authorized by GOV-001 in BASE_SHA', () => {
+    const fixture = readFixture('ccr-planning-only.json');
+    expect(
+      validateTrustedHead({
+        ...trustedHeadFixtureDefaults,
+        changedPaths: fixture.changedEntries.flatMap((entry) => entry.paths),
+        changedEntries: fixture.changedEntries,
+        baseFiles: fixture.baseFiles,
+        basePlanningBootstrap: fixture.basePlanningBootstrap,
+      }),
+    ).toEqual([]);
+  });
+
+  it('rejects a CCR planning record combined with business implementation', () => {
+    const fixture = readFixture('ccr-with-business-implementation.json');
+    expect(
+      validateTrustedHead({
+        ...trustedHeadFixtureDefaults,
+        changedPaths: fixture.changedEntries.flatMap((entry) => entry.paths),
+        changedEntries: fixture.changedEntries,
+        baseFiles: fixture.baseFiles,
+        basePlanningBootstrap: fixture.basePlanningBootstrap,
+      }),
+    ).toContain(fixture.expected);
+  });
+
+  it('allows only the named planner policy files in a governance remediation', () => {
+    const policyPaths = [
+      'docs/governance/work-package.template.md',
+      'docs/work-packages/README.md',
+    ];
+    expect(
+      validateTrustedHead({
+        ...trustedHeadFixtureDefaults,
+        changedPaths: policyPaths,
+        changedEntries: policyPaths.map((path) => ({ status: 'M', paths: [path] })),
+        baseFiles: ['docs/roadmap/IMPLEMENTATION.md', ...policyPaths],
+        basePlanningBootstrap: '> STATUS: APPROVED / GOVERNANCE BOOTSTRAP',
+      }),
+    ).toEqual([]);
+    expect(
+      validateTrustedHead({
+        ...trustedHeadFixtureDefaults,
+        changedPaths: ['docs/governance/GOV-002-security-hardening.md'],
+        changedEntries: [{ status: 'A', paths: ['docs/governance/GOV-002-security-hardening.md'] }],
+        baseFiles: ['docs/roadmap/IMPLEMENTATION.md'],
+        basePlanningBootstrap: '> STATUS: APPROVED / GOVERNANCE BOOTSTRAP',
+      }),
+    ).toContain('TRUSTED_SCOPE_VIOLATION docs/governance/GOV-002-security-hardening.md');
   });
 
   it('passes a necessary roadmap planning status update authorized by GOV-001', () => {
