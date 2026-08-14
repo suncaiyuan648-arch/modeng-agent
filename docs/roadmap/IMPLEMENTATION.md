@@ -11,30 +11,29 @@ scope. It does not authorize implementation by itself.
 
 - Current governance work: **GOV-001 Execution Planning Bootstrap**
 - Current product Work Package: **None**
-- Next product Work Package: **WP-003 Contract Kernel**
+- Next product Work Package: **WP-004 Fake TALK Vertical Slice**
 - Agent business implementation in progress: **None**
 - Frozen architecture source: [`01-跨模块契约与架构决策.md`](../architecture/01-跨模块契约与架构决策.md)
 
 ## Work Package status
 
-| Work Package | Scope                                              | Status             | Evidence                             |
-| ------------ | -------------------------------------------------- | ------------------ | ------------------------------------ |
-| WP-000       | Repository bootstrap and verification toolchain    | COMPLETED / FROZEN | `0356ad7` / `WP-000`                 |
-| WP-001       | Secret and API key protection baseline             | COMPLETED / FROZEN | `84df440` / `WP-001`                 |
-| WP-002       | Architecture Guard and trusted governance baseline | COMPLETED / FROZEN | `a60dd92` / PR #1 and PR #2          |
-| WP-003       | Contract Kernel for the first TALK vertical slice  | NOT STARTED        | Requires an approved planning record |
+| Work Package | Scope                                              | Status             | Evidence                    |
+| ------------ | -------------------------------------------------- | ------------------ | --------------------------- |
+| WP-000       | Repository bootstrap and verification toolchain    | COMPLETED / FROZEN | `0356ad7` / `WP-000`        |
+| WP-001       | Secret and API key protection baseline             | COMPLETED / FROZEN | `84df440` / `WP-001`        |
+| WP-002       | Architecture Guard and trusted governance baseline | COMPLETED / FROZEN | `a60dd92` / PR #1 and PR #2 |
+| WP-003       | Contract Kernel for the first TALK vertical slice  | COMPLETED / FROZEN | `5d1d49a` / PR #13          |
 
-The exact Contract scope, forbidden scope, and acceptance criteria for WP-003 must
-be defined only in its approved planning record. They are intentionally not
-duplicated here.
+The frozen WP-003 scope and acceptance criteria remain defined by its approved
+planning record and implementation evidence. The original WP-003 planning record
+is not reopened by later Work Packages.
 
 ## Queued work
 
-| Order | Work Package | Intent                                           | Entry gate                       |
-| ----- | ------------ | ------------------------------------------------ | -------------------------------- |
-| 1     | WP-003       | Plan and freeze the minimum TALK Contract Kernel | Planning record merged to `main` |
-| 2     | WP-004       | Prove the TALK path with a Fake Model            | WP-003 completed/frozen          |
-| 3     | Later        | Real providers and additional capabilities       | Separate approved Work Packages  |
+| Order | Work Package | Intent                                     | Entry gate                                               |
+| ----- | ------------ | ------------------------------------------ | -------------------------------------------------------- |
+| 1     | WP-004       | Prove the TALK path with a Fake Model      | Approved WP-004 planning record; WP-003 completed/frozen |
+| 2     | Later        | Real providers and additional capabilities | Separate approved Work Packages                          |
 
 ## Deferred scope
 
