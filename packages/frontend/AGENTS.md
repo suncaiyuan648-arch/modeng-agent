@@ -7,6 +7,8 @@
 - Runtime 领域状态只由受信 Event 经过 Reducer 写入。
 - 页面和视觉组件不直接解析 SSE，不维护第二事实源。
 - Capability 前端只包含 Schema 表单、Renderer 和交互插件。
+- Frontend visual, token, responsive, interaction, and accessibility decisions
+  must follow the canonical [Apple Design Reference Policy](../../docs/design/apple-design-reference-policy.md).
 
 ## Forbidden
 
