@@ -8,8 +8,8 @@
   "ownsTables": [],
   "readOnlyTables": [],
   "migrationScopes": [],
-  "publicExports": ["."],
-  "publicContractFiles": ["src/index.ts"],
+  "publicExports": [".", "./styles.css"],
+  "publicContractFiles": ["src/index.ts", "src/components.tsx"],
   "allowedDependencies": ["shared-contracts", "frontend-agent-runtime", "frontend-conversation"],
   "forbiddenImports": ["**/internal/**"],
   "contracts": [],
@@ -19,7 +19,7 @@
   "conformanceSuites": [],
   "fileZones": {
     "frozen": ["module.manifest.json"],
-    "controlled": ["src/index.ts", "package.json"],
+    "controlled": ["src/index.ts", "src/components.tsx", "package.json"],
     "implementation": ["src/internal/**", "src/**/*.test.ts"]
   }
 }

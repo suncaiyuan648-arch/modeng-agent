@@ -14,6 +14,10 @@
       "import": "./dist/index.js"
     }
   },
+  "dependencies": {
+    "@modern-agent/shared-contracts": "workspace:*",
+    "zod": "^4.0.0"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json"

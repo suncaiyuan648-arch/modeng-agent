@@ -47,6 +47,24 @@ importers:
 
   apps/api:
     dependencies:
+      '@modern-agent/backend-agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/backend/agent-runtime
+      '@modern-agent/backend-capability-talk':
+        specifier: workspace:*
+        version: link:../../packages/backend/capabilities/talk
+      '@modern-agent/backend-event-realtime':
+        specifier: workspace:*
+        version: link:../../packages/backend/event-realtime
+      '@modern-agent/backend-model-supply':
+        specifier: workspace:*
+        version: link:../../packages/backend/model-supply
+      '@modern-agent/backend-task-engine':
+        specifier: workspace:*
+        version: link:../../packages/backend/task-engine
+      '@modern-agent/shared-contracts':
+        specifier: workspace:*
+        version: link:../../packages/shared/contracts
       '@nestjs/common':
         specifier: ^11.1.29
         version: 11.1.29(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -65,6 +83,30 @@ importers:
 
   apps/web:
     dependencies:
+      '@modern-agent/frontend-agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/frontend/agent-runtime
+      '@modern-agent/frontend-agent-ui':
+        specifier: workspace:*
+        version: link:../../packages/frontend/agent-ui
+      '@modern-agent/frontend-capability-talk':
+        specifier: workspace:*
+        version: link:../../packages/frontend/capabilities/talk
+      '@modern-agent/frontend-conversation':
+        specifier: workspace:*
+        version: link:../../packages/frontend/conversation
+      '@modern-agent/frontend-project':
+        specifier: workspace:*
+        version: link:../../packages/frontend/project
+      '@modern-agent/frontend-realtime':
+        specifier: workspace:*
+        version: link:../../packages/frontend/realtime
+      '@modern-agent/frontend-workspace':
+        specifier: workspace:*
+        version: link:../../packages/frontend/workspace
+      '@modern-agent/shared-contracts':
+        specifier: workspace:*
+        version: link:../../packages/shared/contracts
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
@@ -87,7 +129,20 @@ importers:
 
   apps/worker: {}
 
-  packages/backend/agent-runtime: {}
+  packages/backend/agent-runtime:
+    dependencies:
+      '@modern-agent/backend-capability-talk':
+        specifier: workspace:*
+        version: link:../capabilities/talk
+      '@modern-agent/backend-event-realtime':
+        specifier: workspace:*
+        version: link:../event-realtime
+      '@modern-agent/backend-task-engine':
+        specifier: workspace:*
+        version: link:../task-engine
+      '@modern-agent/shared-contracts':
+        specifier: workspace:*
+        version: link:../../shared/contracts
 
   packages/backend/billing-credits: {}
 
@@ -97,29 +152,59 @@ importers:
 
   packages/backend/capabilities/summary: {}
 
-  packages/backend/capabilities/talk: {}
+  packages/backend/capabilities/talk:
+    dependencies:
+      '@modern-agent/backend-model-supply':
+        specifier: workspace:*
+        version: link:../../model-supply
+      '@modern-agent/shared-contracts':
+        specifier: workspace:*
+        version: link:../../../shared/contracts
 
   packages/backend/capabilities/video: {}
 
   packages/backend/context-memory: {}
 
-  packages/backend/event-realtime: {}
+  packages/backend/event-realtime:
+    dependencies:
+      '@modern-agent/shared-contracts':
+        specifier: workspace:*
+        version: link:../../shared/contracts
 
   packages/backend/identity-session: {}
 
-  packages/backend/model-supply: {}
+  packages/backend/model-supply:
+    dependencies:
+      '@modern-agent/shared-contracts':
+        specifier: workspace:*
+        version: link:../../shared/contracts
+      zod:
+        specifier: ^4.0.0
+        version: 4.4.3
 
   packages/backend/platform-core: {}
 
   packages/backend/resource-asset: {}
 
-  packages/backend/task-engine: {}
+  packages/backend/task-engine:
+    dependencies:
+      '@modern-agent/shared-contracts':
+        specifier: workspace:*
+        version: link:../../shared/contracts
 
   packages/backend/workspace-conversation: {}
 
-  packages/frontend/agent-runtime: {}
+  packages/frontend/agent-runtime:
+    dependencies:
+      '@modern-agent/shared-contracts':
+        specifier: workspace:*
+        version: link:../../shared/contracts
 
-  packages/frontend/agent-ui: {}
+  packages/frontend/agent-ui:
+    dependencies:
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
 
   packages/frontend/asset: {}
 
@@ -133,11 +218,19 @@ importers:
 
   packages/frontend/capabilities/summary: {}
 
-  packages/frontend/capabilities/talk: {}
+  packages/frontend/capabilities/talk:
+    dependencies:
+      '@modern-agent/frontend-agent-ui':
+        specifier: workspace:*
+        version: link:../../agent-ui
 
   packages/frontend/capabilities/video: {}
 
-  packages/frontend/conversation: {}
+  packages/frontend/conversation:
+    dependencies:
+      '@modern-agent/shared-contracts':
+        specifier: workspace:*
+        version: link:../../shared/contracts
 
   packages/frontend/guided-skill: {}
 
@@ -145,7 +238,11 @@ importers:
 
   packages/frontend/project: {}
 
-  packages/frontend/realtime: {}
+  packages/frontend/realtime:
+    dependencies:
+      '@modern-agent/shared-contracts':
+        specifier: workspace:*
+        version: link:../../shared/contracts
 
   packages/frontend/task-center: {}
 

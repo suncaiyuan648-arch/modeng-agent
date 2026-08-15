@@ -10,7 +10,14 @@
   "migrationScopes": [],
   "publicExports": [],
   "publicContractFiles": [],
-  "allowedDependencies": [],
+  "allowedDependencies": [
+    "shared-contracts",
+    "backend-agent-runtime",
+    "backend-task-engine",
+    "backend-model-supply",
+    "backend-capability-talk",
+    "backend-event-realtime"
+  ],
   "forbiddenImports": ["**/internal/**"],
   "contracts": [],
   "errorCodes": [],
