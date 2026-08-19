@@ -71,6 +71,7 @@ describe('Agent Runtime TALK vertical slice', () => {
     const { runtime, eventStream } = createRuntime();
     const accepted = runtime.submit(command('runtime-success'));
     expect(accepted.duplicate).toBe(false);
+    expect(runtime.getOperation(accepted.acceptedEvent.operationId)?.status).toBe('running');
     const events = await waitForTerminal(eventStream, accepted.acceptedEvent.operationId);
     expect(events.map((event) => event.type)).toEqual([
       'operation.accepted',

@@ -18,12 +18,26 @@ export class SseFrameParser {
   private event: string | undefined;
 
   feed(chunk: string): SseFrame[] {
-    this.buffer += chunk.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    this.buffer += chunk;
     const frames: SseFrame[] = [];
-    let newlineIndex = this.buffer.indexOf('\n');
-    while (newlineIndex >= 0) {
+    while (true) {
+      const lineFeedIndex = this.buffer.indexOf('\n');
+      const carriageReturnIndex = this.buffer.indexOf('\r');
+      const newlineIndex =
+        lineFeedIndex < 0
+          ? carriageReturnIndex
+          : carriageReturnIndex < 0
+            ? lineFeedIndex
+            : Math.min(lineFeedIndex, carriageReturnIndex);
+      if (newlineIndex < 0) break;
+
+      const terminator = this.buffer[newlineIndex];
+      if (terminator === '\r' && newlineIndex === this.buffer.length - 1) break;
+
       const line = this.buffer.slice(0, newlineIndex);
-      this.buffer = this.buffer.slice(newlineIndex + 1);
+      const terminatorLength =
+        terminator === '\r' && this.buffer[newlineIndex + 1] === '\n' ? 2 : 1;
+      this.buffer = this.buffer.slice(newlineIndex + terminatorLength);
       if (line === '') {
         const frame = this.flushFrame();
         if (frame !== undefined) frames.push(frame);
@@ -35,13 +49,16 @@ export class SseFrameParser {
         else if (field === 'event') this.event = rawValue;
         else if (field === 'data') this.dataLines.push(rawValue);
       }
-      newlineIndex = this.buffer.indexOf('\n');
     }
     return frames;
   }
 
   finish(): SseFrame[] {
-    if (this.buffer !== '') return this.feed(`${this.buffer}\n\n`);
+    if (this.buffer !== '') {
+      const frames = this.feed('\n\n');
+      const frame = this.flushFrame();
+      return frame === undefined ? frames : [...frames, frame];
+    }
     const frame = this.flushFrame();
     return frame === undefined ? [] : [frame];
   }
@@ -175,6 +192,10 @@ export function createEventStreamSession(options: EventStreamSessionOptions) {
             url: buildEventStreamUrl(options.baseUrl, options.operationId, cursor),
             afterSequence: cursor,
             signal: controller.signal,
+            onEvent: (event) => {
+              options.onEvent(event);
+              cursor = event.sequence;
+            },
           });
           cursor = result.lastSequence;
           if (result.terminal) return;
@@ -202,6 +223,31 @@ export function createEventStreamSession(options: EventStreamSessionOptions) {
     },
     get isStarted() {
       return started;
+    },
+  };
+}
+
+export interface EventStreamRegistryOptions {
+  readonly onEvent: (event: EventEnvelope) => void;
+  readonly onError?: (error: unknown) => void;
+}
+
+export function createEventStreamRegistry(options: EventStreamRegistryOptions) {
+  const sessions = new Map<string, ReturnType<typeof createEventStreamSession>>();
+
+  return {
+    start(sessionOptions: Omit<EventStreamSessionOptions, 'onEvent' | 'onError'>): void {
+      const session = createEventStreamSession({
+        ...sessionOptions,
+        onEvent: options.onEvent,
+        ...(options.onError === undefined ? {} : { onError: options.onError }),
+      });
+      sessions.set(sessionOptions.operationId, session);
+      void session.start();
+    },
+    close(operationId: OperationId): void {
+      sessions.get(operationId)?.close();
+      sessions.delete(operationId);
     },
   };
 }

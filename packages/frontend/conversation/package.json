@@ -15,6 +15,7 @@
     }
   },
   "dependencies": {
+    "@modern-agent/frontend-agent-runtime": "workspace:*",
     "@modern-agent/shared-contracts": "workspace:*"
   },
   "scripts": {

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 
 export type AgentUiMessage = {
@@ -14,12 +14,12 @@ export interface MessageListProps {
   readonly messages: readonly AgentUiMessage[];
   readonly onRetry?: (message: AgentUiMessage) => void;
   readonly isGenerating?: boolean;
-}
-
-const SCROLL_BOTTOM_THRESHOLD = 48;
-
-function isNearBottom(list: HTMLElement): boolean {
-  return list.scrollHeight - list.scrollTop - list.clientHeight <= SCROLL_BOTTOM_THRESHOLD;
+  readonly isAtBottom?: boolean;
+  readonly onViewportChange?: (metrics: {
+    readonly scrollHeight: number;
+    readonly scrollTop: number;
+    readonly clientHeight: number;
+  }) => void;
 }
 
 export function EmptyState(): ReactNode {
@@ -34,7 +34,7 @@ export function EmptyState(): ReactNode {
 
 export function StreamingIndicator(): ReactNode {
   return (
-    <span className="agent-streaming-indicator" aria-label="Assistant is generating" role="status">
+    <span className="agent-streaming-indicator" aria-hidden="true">
       <span aria-hidden="true" />
       <span aria-hidden="true" />
       <span aria-hidden="true" />
@@ -61,13 +61,12 @@ function Message({
         <div className="agent-message__meta">
           <span>{isAssistant ? 'Modeng' : 'You'}</span>
           {message.status === 'streaming' ? (
-            <span className="agent-message__state">Generating</span>
+            <span className="agent-message__state" aria-hidden="true">
+              Generating
+            </span>
           ) : null}
         </div>
-        <div
-          className="agent-message__bubble"
-          aria-live={message.status === 'streaming' ? 'polite' : undefined}
-        >
+        <div className="agent-message__bubble">
           {message.status === 'failed' ? (
             <div className="agent-error-state">
               <span className="agent-error-state__icon" aria-hidden="true">
@@ -102,39 +101,31 @@ export function MessageList({
   messages,
   onRetry,
   isGenerating = false,
+  isAtBottom = true,
+  onViewportChange,
 }: MessageListProps): ReactNode {
   const listRef = useRef<HTMLElement>(null);
-  const isAtBottomRef = useRef(true);
-  const programmaticScrollRef = useRef(false);
-  const [isAtBottom, setIsAtBottom] = useState(true);
-
-  const updateBottomState = (list: HTMLElement) => {
-    const nextIsAtBottom = isNearBottom(list);
-    if (isAtBottomRef.current === nextIsAtBottom) return;
-    isAtBottomRef.current = nextIsAtBottom;
-    setIsAtBottom(nextIsAtBottom);
-  };
 
   const scrollToBottom = (behavior: ScrollBehavior) => {
     const list = listRef.current;
     if (list === null) return;
-    programmaticScrollRef.current = behavior === 'smooth';
     list.scrollTo({ top: list.scrollHeight, behavior });
-    if (behavior === 'auto') {
-      isAtBottomRef.current = true;
-      setIsAtBottom(true);
-    }
   };
 
   const latestMessageText = messages[messages.length - 1]?.text;
 
   useLayoutEffect(() => {
     const list = listRef.current;
-    if (list !== null && isAtBottomRef.current) scrollToBottom('auto');
-  }, [isGenerating, latestMessageText, messages.length]);
+    if (list !== null && isAtBottom) scrollToBottom('auto');
+  }, [isAtBottom, isGenerating, latestMessageText, messages.length]);
 
   return (
     <div className="agent-message-list-shell">
+      {isGenerating ? (
+        <span className="sr-only" role="status" aria-live="polite">
+          Assistant is generating
+        </span>
+      ) : null}
       <section
         ref={listRef}
         className="agent-message-list"
@@ -143,11 +134,11 @@ export function MessageList({
         data-generating={isGenerating}
         onScroll={(event) => {
           const list = event.currentTarget;
-          if (programmaticScrollRef.current) {
-            if (isNearBottom(list)) programmaticScrollRef.current = false;
-            else return;
-          }
-          updateBottomState(list);
+          onViewportChange?.({
+            scrollHeight: list.scrollHeight,
+            scrollTop: list.scrollTop,
+            clientHeight: list.clientHeight,
+          });
         }}
       >
         {messages.length === 0 ? (
@@ -233,7 +224,10 @@ export function Composer({
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
-            if (!disabled && value.trim() !== '') onSubmit();
+            if (!disabled && value.trim() !== '') {
+              onSubmit();
+              restoreFocus();
+            }
           }
         }}
       />

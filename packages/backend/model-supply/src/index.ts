@@ -80,6 +80,14 @@ export function toModelExecutionError(error: unknown): ModelExecutionError {
   });
 }
 
+function invalidRequestError(): ModelExecutionError {
+  return new ModelExecutionError({
+    code: 'INVALID_INPUT',
+    message: 'The model execution request is invalid.',
+    retryable: false,
+  });
+}
+
 export interface ModelExecutionHandleV1 {
   readonly stream: AsyncIterable<ModelExecutionDeltaV1>;
   readonly abort: (reason?: 'lifecycle' | 'timeout') => Promise<void>;
@@ -136,7 +144,11 @@ export function createFakeModelExecutionPort(
 
   return {
     async execute(input, executeOptions = {}) {
-      parseModelExecutionRequest(input);
+      try {
+        parseModelExecutionRequest(input);
+      } catch {
+        throw invalidRequestError();
+      }
       if (executeOptions.signal?.aborted) throw lifecycleError('lifecycle');
 
       if (failureMode === 'always' || failuresRemaining > 0) {
@@ -159,11 +171,15 @@ export function createFakeModelExecutionPort(
           if (aborted !== undefined) throw lifecycleError(aborted);
           if (delayMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
           if (aborted !== undefined) throw lifecycleError(aborted);
-          yield parseModelExecutionDelta({
-            schemaVersion: SCHEMA_VERSION,
-            ordinal: index + 1,
-            text,
-          });
+          try {
+            yield parseModelExecutionDelta({
+              schemaVersion: SCHEMA_VERSION,
+              ordinal: index + 1,
+              text,
+            });
+          } catch (error) {
+            throw toModelExecutionError(error);
+          }
         }
       })();
 

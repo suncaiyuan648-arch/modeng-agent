@@ -205,6 +205,10 @@ importers:
       react:
         specifier: ^19.2.8
         version: 19.2.8
+    devDependencies:
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
 
   packages/frontend/asset: {}
 
@@ -228,6 +232,9 @@ importers:
 
   packages/frontend/conversation:
     dependencies:
+      '@modern-agent/frontend-agent-runtime':
+        specifier: workspace:*
+        version: link:../agent-runtime
       '@modern-agent/shared-contracts':
         specifier: workspace:*
         version: link:../../shared/contracts

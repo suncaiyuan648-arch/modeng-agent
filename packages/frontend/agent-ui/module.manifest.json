@@ -20,6 +20,6 @@
   "fileZones": {
     "frozen": ["module.manifest.json"],
     "controlled": ["src/index.ts", "src/components.tsx", "package.json"],
-    "implementation": ["src/internal/**", "src/**/*.test.ts"]
+    "implementation": ["src/internal/**", "src/**/*.test.ts", "src/**/*.test.tsx"]
   }
 }

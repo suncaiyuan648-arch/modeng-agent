@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
-import { toTalkAssistantMessage } from '@modern-agent/frontend-capability-talk';
 import {
-  attachOperationToUserEntry,
-  createConversationUserEntry,
+  createConversationController,
+  projectConversationMessages,
 } from '@modern-agent/frontend-conversation';
 import {
   createAgentRuntimeStore,
@@ -12,15 +11,21 @@ import {
 import type { AgentRuntimeState } from '@modern-agent/frontend-agent-runtime';
 import { Composer, MessageList } from '@modern-agent/frontend-agent-ui';
 import type { AgentUiMessage } from '@modern-agent/frontend-agent-ui';
+import { toTalkAssistantMessage } from '@modern-agent/frontend-capability-talk';
 import { DEMO_PROJECT } from '@modern-agent/frontend-project';
-import { createEventStreamSession, parseTransportEvent } from '@modern-agent/frontend-realtime';
+import { createEventStreamRegistry, parseTransportEvent } from '@modern-agent/frontend-realtime';
 import { WORKSPACE_LAYOUT } from '@modern-agent/frontend-workspace';
-import { parseTalkSubmitCommand } from '@modern-agent/shared-contracts';
+import { OperationIdSchema, parseTalkSubmitCommand } from '@modern-agent/shared-contracts';
 
 import { useBootstrapStore } from './bootstrap-store.js';
 
 const API_BASE_URL = import.meta.env['VITE_API_BASE_URL'] ?? 'http://localhost:3000';
 const runtimeStore = createAgentRuntimeStore();
+const conversationController = createConversationController();
+const eventStreamRegistry = createEventStreamRegistry({
+  onEvent: (event) => runtimeStore.dispatch(event),
+  onError: () => conversationController.setRequestError('The live connection is reconnecting…'),
+});
 
 function nextId(prefix: string): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
@@ -30,35 +35,6 @@ function nextId(prefix: string): string {
 
 function useRuntimeState(): AgentRuntimeState {
   return useSyncExternalStore(runtimeStore.subscribe, runtimeStore.getState, runtimeStore.getState);
-}
-
-function projectMessages(
-  state: AgentRuntimeState,
-  users: ReturnType<typeof createConversationUserEntry>[],
-): AgentUiMessage[] {
-  const messages: AgentUiMessage[] = [];
-  for (const user of users) {
-    messages.push({ id: user.id, role: 'user', text: user.text });
-    if (user.operationId !== undefined) {
-      const operation = state.operations[user.operationId];
-      if (operation !== undefined) {
-        messages.push(
-          toTalkAssistantMessage({
-            operationId: operation.operationId,
-            text: operation.text,
-            status:
-              operation.status === 'accepted' || operation.status === 'running'
-                ? 'streaming'
-                : operation.status,
-            ...(operation.error === undefined
-              ? {}
-              : { errorMessage: operation.error.message, retryable: operation.error.retryable }),
-          }),
-        );
-      }
-    }
-  }
-  return messages;
 }
 
 async function readResponseBody(response: Response): Promise<unknown> {
@@ -72,22 +48,25 @@ async function readResponseBody(response: Response): Promise<unknown> {
 export function App() {
   const status = useBootstrapStore((state) => state.status);
   const runtimeState = useRuntimeState();
-  const [draft, setDraft] = useState('');
-  const [users, setUsers] = useState<ReturnType<typeof createConversationUserEntry>[]>([]);
+  const conversationState = useSyncExternalStore(
+    conversationController.subscribe,
+    conversationController.getState,
+    conversationController.getState,
+  );
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [requestError, setRequestError] = useState<string | undefined>();
-  const sessions = useRef(new Map<string, ReturnType<typeof createEventStreamSession>>());
   const generating = getGeneratingOperation(runtimeState) !== undefined;
-  const messages = useMemo(() => projectMessages(runtimeState, users), [runtimeState, users]);
+  const messages = useMemo(
+    () =>
+      projectConversationMessages(runtimeState, conversationState.users, toTalkAssistantMessage),
+    [runtimeState, conversationState.users],
+  );
 
   useEffect(() => {
     document.documentElement.dataset['theme'] = theme;
   }, [theme]);
 
   const submitText = useCallback(async (rawText: string) => {
-    const entry = createConversationUserEntry(nextId('user'), rawText);
-    setUsers((current) => [...current, entry]);
-    setRequestError(undefined);
+    const entry = conversationController.beginSubmission(rawText);
     const command = parseTalkSubmitCommand({
       schemaVersion: 1,
       commandId: `command_${nextId('request').replaceAll('-', '_')}`,
@@ -105,45 +84,38 @@ export function App() {
       });
       const payload = await readResponseBody(response);
       if (!response.ok) {
-        setRequestError('The request could not be sent. Please try again.');
+        conversationController.setRequestError('The request could not be sent. Please try again.');
         return;
       }
       const accepted = parseTransportEvent(payload);
       if (accepted.type !== 'operation.accepted') {
-        setRequestError('The request could not be started. Please try again.');
+        conversationController.setRequestError(
+          'The request could not be started. Please try again.',
+        );
         return;
       }
-      setUsers((current) =>
-        current.map((user) =>
-          user.id === entry.id ? attachOperationToUserEntry(user, accepted.operationId) : user,
-        ),
-      );
+      conversationController.attachOperation(entry.id, accepted.operationId);
       runtimeStore.dispatch(accepted);
-      const session = createEventStreamSession({
+      eventStreamRegistry.start({
         baseUrl: API_BASE_URL,
         operationId: accepted.operationId,
         afterSequence: accepted.sequence,
-        onEvent: (event) => runtimeStore.dispatch(event),
-        onError: () => setRequestError('The live connection is reconnecting…'),
       });
-      sessions.current.set(accepted.operationId, session);
-      void session.start();
     } catch {
-      setRequestError('The request could not be sent. Please try again.');
+      conversationController.setRequestError('The request could not be sent. Please try again.');
     }
-    setDraft('');
   }, []);
 
   const retry = useCallback(
     (message: AgentUiMessage) => {
       if (message.role === 'assistant' && message.status === 'failed') {
-        const user = users.find(
-          (candidate) => candidate.operationId === message.id.replace('assistant-', ''),
+        const user = conversationController.findUserByOperationId(
+          OperationIdSchema.parse(message.id.replace('assistant-', '')),
         );
         if (user !== undefined) void submitText(user.text);
       }
     },
-    [submitText, users],
+    [submitText],
   );
 
   return (
@@ -179,7 +151,8 @@ export function App() {
             <div>
               <div className="agent-project-row__name">New conversation</div>
               <div className="agent-project-row__detail">
-                {users.length} {users.length === 1 ? 'message' : 'messages'}
+                {conversationState.users.length}{' '}
+                {conversationState.users.length === 1 ? 'message' : 'messages'}
               </div>
             </div>
           </div>
@@ -202,22 +175,28 @@ export function App() {
             <div className="agent-toolbar__eyebrow">Project / TALK</div>
             <h1 className="agent-toolbar__title">New conversation</h1>
           </div>
-          <div className="agent-toolbar__status" aria-live="polite">
+          <div className="agent-toolbar__status">
             <span className="agent-toolbar__dot" aria-hidden="true" />
             {generating ? 'Generating' : 'Ready'}
           </div>
         </header>
-        <MessageList messages={messages} isGenerating={generating} onRetry={retry} />
+        <MessageList
+          messages={messages}
+          isGenerating={generating}
+          isAtBottom={conversationState.viewport.isAtBottom}
+          onViewportChange={conversationController.updateViewport}
+          onRetry={retry}
+        />
         <div className="agent-composer-dock">
-          {requestError ? (
+          {conversationState.requestError ? (
             <p className="agent-request-error" role="alert">
-              {requestError}
+              {conversationState.requestError}
             </p>
           ) : null}
           <Composer
-            value={draft}
-            onChange={setDraft}
-            onSubmit={() => void submitText(draft)}
+            value={conversationState.draft}
+            onChange={conversationController.setDraft}
+            onSubmit={() => void submitText(conversationState.draft)}
             disabled={generating}
           />
         </div>

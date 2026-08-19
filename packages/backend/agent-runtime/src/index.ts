@@ -88,6 +88,10 @@ export function createAgentRuntime(composition: AgentRuntimeComposition): AgentR
   const run = async (record: OperationRecord): Promise<void> => {
     const taskRunId = record.taskRunId;
     composition.taskEngine.start(taskRunId);
+    record.operation = OperationRefSchema.parse({
+      ...record.operation,
+      status: 'running',
+    });
     try {
       const handle = await composition.talkCapability.execute({
         operationId: record.operation.operationId,

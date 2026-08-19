@@ -16,6 +16,13 @@ describe('frontend realtime SSE boundary', () => {
     );
   });
 
+  it('preserves CRLF framing when a network chunk splits the carriage return pair', () => {
+    const parser = new SseFrameParser();
+    expect(parser.feed('id: 1\r')).toEqual([]);
+    expect(parser.feed('\ndata: {"ok":true}\r')).toEqual([]);
+    expect(parser.feed('\n\r\n')).toEqual([{ id: '1', data: '{"ok":true}' }]);
+  });
+
   it('builds an afterSequence replay URL and fails closed on critical events', () => {
     expect(buildEventStreamUrl('http://localhost:3000', realtimeOperationId, 7)).toBe(
       'http://localhost:3000/talk/operations/operation_realtime/events?afterSequence=7',
@@ -103,5 +110,89 @@ describe('frontend realtime SSE boundary', () => {
     expect(
       (fetchImpl as unknown as { mock: { calls: Array<[string]> } }).mock.calls[1]?.[0],
     ).toContain('afterSequence=1');
+  });
+
+  it('keeps the latest sequence when a stream fails after delivering an event', async () => {
+    const acceptedEvent = {
+      schemaVersion: 1,
+      eventId: 'event_partial_accepted',
+      operationId: reconnectOperationId,
+      sequence: 1,
+      occurredAt: '2026-08-15T00:00:00.000Z',
+      type: 'operation.accepted',
+      payload: {
+        operation: {
+          operationId: 'operation_reconnect',
+          project: { projectId: 'project_reconnect', brandId: 'brand_reconnect', domain: 'TALK' },
+          status: 'accepted',
+          executionGraphId: 'graph_reconnect',
+          createdAt: '2026-08-15T00:00:00.000Z',
+        },
+        executionGraph: {
+          executionGraphId: 'graph_reconnect',
+          operationId: 'operation_reconnect',
+          rootNodeId: 'node_reconnect',
+          nodes: [{ nodeId: 'node_reconnect', kind: 'talk', dependsOn: [] }],
+        },
+      },
+    };
+    const failedEvent = {
+      schemaVersion: 1,
+      eventId: 'event_partial_failed',
+      operationId: reconnectOperationId,
+      sequence: 2,
+      occurredAt: '2026-08-15T00:00:00.000Z',
+      type: 'operation.failed',
+      payload: {
+        operation: {
+          operationId: 'operation_reconnect',
+          project: { projectId: 'project_reconnect', brandId: 'brand_reconnect', domain: 'TALK' },
+          status: 'failed',
+          executionGraphId: 'graph_reconnect',
+          createdAt: '2026-08-15T00:00:00.000Z',
+          completedAt: '2026-08-15T00:00:00.000Z',
+        },
+        error: {
+          code: 'DEPENDENCY_UNAVAILABLE',
+          message: 'The model is temporarily unavailable.',
+          retryable: true,
+        },
+      },
+    };
+    const firstResponse = new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(`id: 1\ndata: ${JSON.stringify(acceptedEvent)}\n\n`),
+          );
+          setTimeout(() => controller.error(new Error('connection dropped')), 0);
+        },
+      }),
+      { status: 200 },
+    );
+    const secondResponse = new Response(`id: 2\ndata: ${JSON.stringify(failedEvent)}\n\n`, {
+      status: 200,
+    });
+    const responses = [firstResponse, secondResponse];
+    const fetchImpl = vi.fn(
+      async () => responses.shift() ?? new Response('', { status: 500 }),
+    ) as unknown as typeof fetch;
+    const seen: number[] = [];
+    const session = (await import('./index.js')).createEventStreamSession({
+      baseUrl: 'http://localhost:3000',
+      operationId: reconnectOperationId,
+      fetchImpl,
+      reconnectDelayMs: 0,
+      onEvent: (event) => seen.push(event.sequence),
+    });
+
+    await session.start();
+
+    expect(seen).toEqual([1, 2]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(
+      (fetchImpl as unknown as { mock: { calls: Array<[string]> } }).mock.calls[1]?.[0],
+    ).toContain('afterSequence=1');
+    expect(session.afterSequence).toBe(2);
   });
 });

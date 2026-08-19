@@ -4,10 +4,6 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const styles = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8');
-const components = readFileSync(
-  fileURLToPath(new URL('./components.tsx', import.meta.url)),
-  'utf8',
-);
 
 const colorTokens = [
   'background-canvas',
@@ -49,12 +45,6 @@ describe('frontend-agent-ui semantic token foundation', () => {
     expect(styles).toContain('.agent-scroll-to-bottom');
     expect(styles).toContain('--ma-material-composer-fade-start:');
     expect(styles).toContain('--ma-material-composer-fade-end:');
-    expect(components).toContain('摩灯 Agent，面向真实任务的工作平台');
-    expect(components).toContain('isAtBottom');
-    expect(components).toContain('Scroll to latest message');
-    expect(components.indexOf('agent-conversation-slogan')).toBeLessThan(
-      components.indexOf('agent-message-list__anchor'),
-    );
   });
 
   it('contains token-backed interaction and reduced-motion primitives', () => {
@@ -65,13 +55,9 @@ describe('frontend-agent-ui semantic token foundation', () => {
     expect(styles).not.toContain('stop-viewing');
   });
 
-  it('keeps the composer focusable while generating and anchors the message viewport', () => {
+  it('contains the viewport and composer layout primitives', () => {
     expect(styles).toContain('height: 100dvh;');
     expect(styles).toContain('overflow: hidden;');
     expect(styles).toContain('min-height: 0;');
-    expect(components).toContain('readOnly={disabled}');
-    expect(components).toContain('restoreFocus');
-    expect(components).toContain('list.scrollTo');
-    expect(components).toContain('useLayoutEffect');
   });
 });
