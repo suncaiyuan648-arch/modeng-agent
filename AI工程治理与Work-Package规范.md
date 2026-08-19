@@ -1,8 +1,8 @@
 # AI 工程治理与 Work Package 规范
 
-> 版本：1.0  
-> 日期：2026-08-11  
-> 状态：Architecture Baseline 1.0 的实施附件  
+> 版本：1.1 Rules Lite
+> 日期：2026-08-19
+> 状态：Phase 0 精简治理基线
 > 关联架构：[AI Agent Platform Architecture V2.5](./React-Node-全栈Agent架构规范.md)
 
 ## 0. 目的
@@ -22,12 +22,14 @@ Architecture Baseline
 -> Module Manifest
 -> Public Contract + Runtime Schema
 -> Contract Fixtures + Conformance Suite
--> Work Package
+-> Task / Work Package（施工说明）
 -> Implementation
 -> CI + Delivery Self-check
 ```
 
 普通实现任务只负责灰盒内部；Module Boundary、Owner、Public Contract、Invariant 和 Architecture Taste 由人或明确授权的架构任务维护。
+
+Phase 0 不建设文件级施工授权引擎。Work Package 不参与 CI 权限判定；静态门禁只保护长期成立的架构 invariant、明确 Frozen Contract 和治理 Trust Root。
 
 ## 1. 推荐治理目录
 
@@ -92,18 +94,9 @@ Manifest 是给 AI、CI 和 Reviewer 共同读取的静态事实，不参与运�
     "credit_ledger"
   ],
   "readOnlyTables": [],
-  "migrationScopes": [
-    "backend-billing-credits"
-  ],
-  "publicExports": [
-    "BillingQuotePort",
-    "CreditReservationPort",
-    "SettlementPort"
-  ],
-  "allowedDependencies": [
-    "shared-domain-kernel",
-    "backend-platform-core"
-  ],
+  "migrationScopes": ["backend-billing-credits"],
+  "publicExports": ["BillingQuotePort", "CreditReservationPort", "SettlementPort"],
+  "allowedDependencies": ["shared-domain-kernel", "backend-platform-core"],
   "forbiddenImports": [
     "@prisma/client",
     "bullmq",
@@ -117,32 +110,14 @@ Manifest 是给 AI、CI 和 Reviewer 共同读取的静态事实，不参与运�
       "version": "1.0.0"
     }
   ],
-  "errorCodes": [
-    "BILLING_QUOTE_EXPIRED",
-    "INSUFFICIENT_CREDITS",
-    "BILLING_VERSION_CONFLICT"
-  ],
+  "errorCodes": ["BILLING_QUOTE_EXPIRED", "INSUFFICIENT_CREDITS", "BILLING_VERSION_CONFLICT"],
   "featureFlags": [],
-  "retentionPolicies": [
-    "billing-financial-audit@1"
-  ],
-  "conformanceSuites": [
-    "BillingPortContractSuite@1"
-  ],
+  "retentionPolicies": ["billing-financial-audit@1"],
+  "conformanceSuites": ["BillingPortContractSuite@1"],
   "fileZones": {
-    "frozen": [
-      "module.manifest.json",
-      "contract.ts"
-    ],
-    "controlled": [
-      "index.ts"
-    ],
-    "implementation": [
-      "internal/**",
-      "adapters/**",
-      "tests/**",
-      "testing/**"
-    ]
+    "frozen": ["module.manifest.json", "contract.ts"],
+    "controlled": ["index.ts"],
+    "implementation": ["internal/**", "adapters/**", "tests/**", "testing/**"]
   }
 }
 ```
@@ -156,7 +131,7 @@ Manifest 是给 AI、CI 和 Reviewer 共同读取的静态事实，不参与运�
 5. 实际 import 必须是 `allowedDependencies` 子集。
 6. 跨包 import 只能指向目标包根公开入口。
 7. 实际 public export 必须在 `publicExports` 中。
-8. Frozen/Controlled 路径必须能映射到当前 Work Package 权限。
+8. Manifest 的 Owner、依赖方向和 versioned Contract 字段变化必须进入 ADR/CCR Review；普通元数据变化由当前 PR Review。
 9. Public Contract 必须声明 owner/version/fixtures。
 10. Error code 全局唯一，并由一个 Manifest 拥有语义。
 11. 使用的 Feature Flag 和 Retention Policy 必须声明 Owner/版本。
@@ -171,7 +146,7 @@ Manifest 是给 AI、CI 和 Reviewer 共同读取的静态事实，不参与运�
 
 ## 3. AI Work Package 模板
 
-每个 AI Coding 任务先复制以下模板。没有 Work Package，不进入实现。
+跨模块、风险较高或需要明确验收的任务建议使用以下模板。小型产品任务可以直接由 Issue/用户请求驱动。Work Package 是施工说明书，不是权限令牌；CI 不解析其中的路径决定实现者能否修改文件。
 
 ```md
 # WP-XXXX：任务名称
@@ -196,7 +171,7 @@ Manifest 是给 AI、CI 和 Reviewer 共同读取的静态事实，不参与运�
 - 明确不实现什么。
 - 不进行无关重构。
 
-## Allowed write paths
+## Expected change areas
 
 - packages/backend/capabilities/image/**
 - packages/frontend/capabilities/image/**
@@ -216,7 +191,7 @@ Manifest 是给 AI、CI 和 Reviewer 共同读取的静态事实，不参与运�
 - 直接 import Prisma/BullMQ/Provider SDK。
 - 直接查询或写入其他模块表。
 - 修改余额、TaskRun、Operation、Artifact 终态。
-- 修改 Contract/Manifest/Migration，除非 Metadata 明确授权。
+- 未经 CCR/ADR 修改 Frozen Contract、Owner、依赖方向或 Migration。
 
 ## Public dependencies
 
@@ -266,9 +241,9 @@ Manifest 是给 AI、CI 和 Reviewer 共同读取的静态事实，不参与运�
 
 ### 3.1 Work Package 拆分原则
 
-- 一个 Work Package 只有一个主要模块 Owner。
-- 允许多个包时必须是同一垂直切片中明确列出的适配层，不能写“允许修改整个仓库”。
-- 两个并行任务不能同时修改同一 Frozen/Controlled 文件。
+- 一个 Work Package 应有一个主要模块 Owner。
+- 允许多个包时应是同一垂直切片中能解释的适配层。
+- 两个并行任务不能同时修改同一 Frozen Contract 或 RED 架构边界。
 - 需求依赖 Contract 变化时先完成 Contract Work Package，再并行 Provider/Consumer Work Package。
 - “顺便重构”“统一优化”“修复所有相关问题”不属于可验收目标。
 
@@ -336,6 +311,10 @@ Contract owner 批准后，先合并 Schema/Fixture，再实现双方代码。�
 - Date：
 - Deciders：
 - Related CR/WP：
+
+## Authorization
+
+- `<exact RED path changed by this ADR>`
 
 ## Context
 
@@ -458,8 +437,8 @@ INTERNAL_UNEXPECTED
 
 AI 在结束任务前必须逐项回答并给出证据：
 
-1. 修改了哪些文件，是否都在 Allowed write paths？
-2. 是否修改 Frozen/Controlled 文件？对应 CR/ADR/WP 授权是什么？
+1. 修改了哪些文件，是否都能由当前目标和验收解释？
+2. 是否修改 RED 文件/语义？对应 CCR/ADR 是什么？YELLOW 变化为何必要？
 3. 是否改变 Public Contract、状态机、默认值、错误或幂等语义？
 4. 是否增加跨模块依赖或 deep import？
 5. 是否直接访问 Prisma、raw SQL、BullMQ、Provider SDK 或他域表？
@@ -469,7 +448,7 @@ AI 在结束任务前必须逐项回答并给出证据：
 9. 是否产生新的架构决策？若是，ADR 在哪里？
 10. 回滚方式是什么，是否会遗留数据或外部副作用？
 
-任何回答无法证明、出现未授权变化或 `new architecture decision=yes` 时，任务只能进入 Review，不能自动合并。
+任何回答无法证明、出现未批准的 RED 变化或 `new architecture decision=yes` 时，任务只能进入 Review，不能自动合并。
 
 ## 10. 开工准入清单
 
@@ -481,7 +460,7 @@ Phase 0 完成至少满足：
 - [ ] Public Contract 的 Owner、Zod Schema、版本与 Fixture 明确。
 - [ ] Platform Error v1 与 retry policy 测试存在。
 - [ ] 核心 Port 有 Conformance Test Kit。
-- [ ] Work Package、CR、ADR 模板和 CI 授权检查可运行。
+- [ ] Work Package、CR、ADR 模板可用，CI 架构/Contract/安全检查可运行。
 - [ ] Prisma/BullMQ/Provider SDK/import boundary 能被 CI 自动拦截。
 - [ ] Migration 与 Retention 基线已记录。
 
@@ -491,15 +470,15 @@ Phase 0 完成至少满足：
 
 ### 11.1 仓库文件分工
 
-| 文件 | 作用 | 不应承载 |
-| --- | --- | --- |
-| 根 `AGENTS.md` | 短仓库宪法、上下文加载流程、关键红线、交付格式 | 完整 3000 行架构、模块所有字段 |
-| 模块 `AGENTS.md` | 当前子树责任、Owner、关键 invariant、局部验证命令 | 复制根规则或其他模块实现 |
-| `module.manifest.json` | CI 可执行的 Owner、表、依赖、export、Zone | 解释性长文、Secret、运行时脚本 |
-| `README.md` | 模块用途、用法、故障语义和设计原因 | 机器权限真源 |
-| `CONTRIBUTING.md` | 人类入口与提交流程 | 另一套不同规则 |
-| PR template | AI/人共同的变更声明和证据 | 替代 CI |
-| `.codex/` | Codex 模型、沙箱、权限、MCP/hook 等运行配置 | Contract、Owner、架构基线唯一真源 |
+| 文件                   | 作用                                              | 不应承载                          |
+| ---------------------- | ------------------------------------------------- | --------------------------------- |
+| 根 `AGENTS.md`         | 短仓库宪法、上下文加载流程、关键红线、交付格式    | 完整 3000 行架构、模块所有字段    |
+| 模块 `AGENTS.md`       | 当前子树责任、Owner、关键 invariant、局部验证命令 | 复制根规则或其他模块实现          |
+| `module.manifest.json` | CI 可执行的 Owner、表、依赖、export、Zone         | 解释性长文、Secret、运行时脚本    |
+| `README.md`            | 模块用途、用法、故障语义和设计原因                | 机器权限真源                      |
+| `CONTRIBUTING.md`      | 人类入口与提交流程                                | 另一套不同规则                    |
+| PR template            | AI/人共同的变更声明和证据                         | 替代 CI                           |
+| `.codex/`              | Codex 模型、沙箱、权限、MCP/hook 等运行配置       | Contract、Owner、架构基线唯一真源 |
 
 Codex 官方会在每次运行开始时从 project root 到当前 working directory 查找并合并 `AGENTS.md`/override，更深目录规则后出现并优先；默认合并预算是 32 KiB。因为从仓库根启动时模块级文件不一定处于自动发现链，根文件仍必须要求 Agent 在编辑目标模块前主动读取最近的局部 AGENTS、Manifest、Contract 和相关测试。[OpenAI：Custom instructions with AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md.md)
 
@@ -528,12 +507,12 @@ pnpm review:architecture
 
 在脚本真正存在前，AGENTS 和 PR 只能把它们标记为“目标命令”，不得声称已经运行。脚本实现后，失败必须返回稳定诊断码，例如：
 
-| Prefix | 示例 |
-| --- | --- |
-| `ARCH` | `ARCH001` deep import、`ARCH005` unowned table、`ARCH007` forbidden Prisma |
-| `TEST` | `TEST001` missing behavior test、`TEST004` retry without idempotency fixture |
-| `SCHEMA` | `SCHEMA001` external data bypasses runtime validation |
-| `SEC` | `SEC001` secret/raw provider data enters Public Trace |
+| Prefix   | 示例                                                                         |
+| -------- | ---------------------------------------------------------------------------- |
+| `ARCH`   | `ARCH001` deep import、`ARCH005` unowned table、`ARCH007` forbidden Prisma   |
+| `TEST`   | `TEST001` missing behavior test、`TEST004` retry without idempotency fixture |
+| `SCHEMA` | `SCHEMA001` external data bypasses runtime validation                        |
+| `SEC`    | `SEC001` secret/raw provider data enters Public Trace                        |
 
 错误码必须附带目标文件、违反的 Manifest/Policy 和安全修复方向，避免 AI 只看到“失败”后用另一种方式绕过。
 

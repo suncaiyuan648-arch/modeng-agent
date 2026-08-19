@@ -1,0 +1,6 @@
+{
+  "kind": "contract",
+  "expectedCode": "ARCH011",
+  "files": ["prisma/migrations/20260819_add_task/migration.sql"],
+  "baseDocuments": []
+}

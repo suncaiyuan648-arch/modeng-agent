@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { scanText } from '../../scripts/check-secrets.mjs';
+import { readGitFile, scanText } from '../../scripts/check-secrets.mjs';
 
 describe('secret scanner', () => {
   it('ignores blank and documented placeholders', () => {
@@ -22,5 +22,9 @@ describe('secret scanner', () => {
     const privateKeyMarker = ['-----BEGIN', ' PRIVATE KEY-----'].join('');
 
     expect(scanText(privateKeyMarker)).toEqual([{ line: 1, rule: 'private-key' }]);
+  });
+
+  it('skips tracked files deleted from the working tree', () => {
+    expect(readGitFile('tests/security/does-not-exist.deleted', false)).toBeNull();
   });
 });

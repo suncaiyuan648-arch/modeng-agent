@@ -21,13 +21,6 @@ export const ARCHITECTURE_CODES = Object.freeze({
 });
 
 export const ARCHITECTURE_BASELINE_PATH = 'docs/governance/architecture-guard-baseline.json';
-export const EXECUTION_PLANNING_BOOTSTRAP_PATH =
-  'docs/governance/GOV-001-execution-planning-bootstrap.md';
-const CCR_PLANNING_PATH_PATTERN = /^docs\/contract-changes\/CCR-\d{4,}\.md$/u;
-const PLANNER_POLICY_PATHS = new Set([
-  'docs/governance/work-package.template.md',
-  'docs/work-packages/README.md',
-]);
 
 export const infrastructurePackages = new Set([
   '@prisma/client',
@@ -114,18 +107,29 @@ export function computeChangeRange({
   runGit = (args) => defaultGit(args),
 } = {}) {
   const explicitBase = env.ARCH_BASE_SHA?.trim();
-  if (explicitBase === undefined || explicitBase === '') {
-    throw new ArchitectureRangeError(
-      'ARCH_BASELINE_MISSING',
-      'ARCH_BASE_SHA is required; protected checks do not infer a baseline from main, origin/main, tags, or HEAD',
-    );
+  let baseRef;
+  let source;
+  if (explicitBase !== undefined && explicitBase !== '') {
+    baseRef = verifyRef(runGit, explicitBase);
+    source = 'explicit-ARCH_BASE_SHA';
+  } else {
+    for (const candidate of ['origin/main', 'main']) {
+      const candidateRef = verifyRef(runGit, candidate);
+      if (candidateRef === undefined) continue;
+      const mergeBase = runGit(['merge-base', 'HEAD', candidateRef]);
+      if (mergeBase.status === 0 && mergeBase.stdout.trim() !== '') {
+        baseRef = mergeBase.stdout.trim();
+        source = `local-merge-base:${candidate}`;
+        break;
+      }
+    }
   }
-
-  const baseRef = verifyRef(runGit, explicitBase);
   if (baseRef === undefined) {
     throw new ArchitectureRangeError(
       'ARCH_BASELINE_MISSING',
-      `ARCH_BASE_SHA ${explicitBase} is unavailable; fetch the trusted base commit`,
+      explicitBase
+        ? `ARCH_BASE_SHA ${explicitBase} is unavailable; fetch the trusted base commit`
+        : 'set ARCH_BASE_SHA or fetch a local main/origin/main ref',
     );
   }
 
@@ -143,7 +147,7 @@ export function computeChangeRange({
   }
   const files = [...new Set(entries.flatMap((entry) => entry.paths))];
 
-  return Object.freeze({ baseRef, source: 'explicit-ARCH_BASE_SHA', entries, files });
+  return Object.freeze({ baseRef, source, entries, files });
 }
 
 export function parseGovernanceBaseline(content) {
@@ -209,29 +213,6 @@ export function isCurrentAuthorizationDocument({ file, files, content, targetPat
     files.includes(file) &&
     authorizationSection(content) !== '' &&
     exactPathInAuthorization(authorizationSection(content), targetPath)
-  );
-}
-
-export function findCurrentAuthorization({ files, documents = [], targetPath, kind }) {
-  const pattern =
-    kind === 'ccr'
-      ? /^docs\/contract-changes\/CCR-\d+\.md$/u
-      : /^docs\/work-packages\/WP-\d+[^/]*\.md$/u;
-  return documents.find(
-    (document) =>
-      pattern.test(document.file) &&
-      isCurrentAuthorizationDocument({
-        file: document.file,
-        files,
-        content: document.content,
-        targetPath,
-      }),
-  );
-}
-
-export function mergeBaseAuthorization({ files, documents = [], targetPaths, kind }) {
-  return targetPaths.every(
-    (targetPath) => findCurrentAuthorization({ files, documents, targetPath, kind }) !== undefined,
   );
 }
 
@@ -932,118 +913,26 @@ export function validateContractChangeProposal(file, content) {
   return errors;
 }
 
-const frozenContractPattern =
-  /^(?:packages\/shared\/contracts\/src\/index\.ts$|packages\/(?:frontend|backend|infrastructure)\/.*\/src\/index\.ts$|packages\/.*\/[^/]*(?:contract|state[-_]machine|operation-status)[^/]*\.(?:ts|tsx|mts|cts|json))/u;
+const explicitlyNamedContractPattern =
+  /^(?:apps|packages)\/.*\/src\/(?:[^/]*(?:contract|schema|port|state[-_]machine|operation-status)[^/]*)\.(?:ts|tsx|mts|cts|json)$/iu;
 
 export function isFrozenContractPath(file) {
-  if (isManifestPath(file) || isControlledPackagePath(file)) {
+  const testOrFixture =
+    /\/(?:tests?|testing)\//u.test(file) || /\.(?:test|spec)\.[^.]+$/u.test(file);
+  if (/^packages\/shared\/contracts\/src\//u.test(file)) return !testOrFixture;
+  if (/\/internal\//u.test(file) || testOrFixture) {
     return false;
   }
-  return frozenContractPattern.test(file);
-}
-
-export function isManifestPath(file) {
-  return file.endsWith('/module.manifest.json') || file === 'module.manifest.json';
-}
-
-export function isControlledPackagePath(file) {
-  return /^(?:apps|packages)\/[^/]+(?:\/[^/]+)*\/package\.json$/u.test(file);
+  return explicitlyNamedContractPattern.test(file);
 }
 
 function isApprovedDocument(content) {
-  return /(?:^|\n)\s*(?:>\s*)?-?\s*Status:\s*APPROVED\b/imu.test(content ?? '');
-}
-
-export function isPlanningOnlyPath(file) {
-  if (/^docs\/roadmap\//u.test(file)) {
-    return true;
-  }
-  if (CCR_PLANNING_PATH_PATTERN.test(file)) {
-    return true;
-  }
-  if (file === 'docs/work-packages/README.md') {
-    return true;
-  }
-  const workPackageMatch = /^docs\/work-packages\/WP-(\d+)(?:[^/]*)\.md$/u.exec(file);
-  if (workPackageMatch !== null) {
-    return Number.parseInt(workPackageMatch[1], 10) >= 3;
-  }
-  return /^docs\/governance\/GOV-\d+[^/]*\.md$/u.test(file);
-}
-
-function isPlannerPolicyPath(file) {
-  return PLANNER_POLICY_PATHS.has(file);
-}
-
-export function hasApprovedPlanningBootstrap(documents = []) {
-  return documents.some(
-    (document) =>
-      document.file === EXECUTION_PLANNING_BOOTSTRAP_PATH && isApprovedDocument(document.content),
-  );
+  return /(?:^|\n)\s*(?:>\s*)?-?\s*Status[:：]\s*(?:APPROVED|accepted)\b/imu.test(content ?? '');
 }
 
 function authorizationDocuments(documents, pattern) {
   return documents.filter(
     (document) => pattern.test(document.file) && isApprovedDocument(document.content),
-  );
-}
-
-export function extractAllowedWritePaths(content) {
-  const source = content ?? '';
-  const header =
-    /^##\s+(?:Allowed implementation paths|Allowed write paths|Additional Implementation Scope for Remediation Round 2)\s*$/imu.exec(
-      source,
-    );
-  if (header === null) {
-    return [];
-  }
-  const remainder = source.slice(header.index + header[0].length);
-  const nextHeading = /^##\s+/mu.exec(remainder);
-  return remainder
-    .slice(0, nextHeading?.index ?? remainder.length)
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('- '))
-    .flatMap((line) => {
-      const value = line.slice(2).trim();
-      const fenced = [...value.matchAll(/`([^`]+)`/gu)].map((match) => match[1]);
-      return fenced.length > 0 ? fenced : [value];
-    })
-    .map((value) => value.trim())
-    .filter(
-      (value) =>
-        /^(?:\.github|AGENTS\.md|apps|packages|scripts|tests|docs|package\.json)/u.test(value) ||
-        value === 'pnpm-lock.yaml',
-    );
-}
-
-function segmentPatternToRegExp(segment) {
-  return segment.replace(/[.+?^${}()|[\]\\]/gu, '\\$&').replaceAll('*', '[^/]*');
-}
-
-export function pathMatchesPattern(file, pattern) {
-  if (pattern === file) {
-    return true;
-  }
-  const segments = pattern.split('/');
-  let glob = '^';
-  segments.forEach((segment, index) => {
-    const isLast = index === segments.length - 1;
-    if (segment === '**') {
-      glob += isLast ? '(?:[^/]+(?:/[^/]+)*)?' : '(?:[^/]+/)*';
-    } else {
-      glob += segmentPatternToRegExp(segment);
-      if (!isLast) {
-        glob += '/';
-      }
-    }
-  });
-  return new RegExp(`${glob}$`, 'u').test(file);
-}
-
-function approvedWorkPackages(documents) {
-  return authorizationDocuments(documents, /^docs\/work-packages\/WP-\d+[^/]*\.md$/u).sort(
-    (left, right) => left.file.localeCompare(right.file),
   );
 }
 
@@ -1055,12 +944,6 @@ function approvedArtifactForPath(documents, pattern, targetPath) {
       content: document.content,
       targetPath,
     }),
-  );
-}
-
-function approvedWorkPackageAuthorizesPath(workPackages, targetPath) {
-  return workPackages.some((workPackage) =>
-    extractAllowedWritePaths(workPackage.content).some((pattern) => pattern === targetPath),
   );
 }
 
@@ -1076,46 +959,21 @@ export function evaluateContractChanges({
   entries = [],
   proposals = [],
   baseDocuments,
+  contractChangePaths = [],
+  architectureChangePaths = [],
 }) {
   const violations = [];
   const changedPaths = entryPaths(entries, files);
-  const contractPaths = changedPaths.filter(isFrozenContractPath);
-  const manifestPaths = changedPaths.filter(
-    (file) => isManifestPath(file) || isControlledPackagePath(file),
-  );
+  const contractPaths = [
+    ...new Set([...changedPaths.filter(isFrozenContractPath), ...contractChangePaths]),
+  ];
+  const architecturePaths = [
+    ...new Set([
+      ...changedPaths.filter((file) => /^prisma\/migrations(?:\/|$)/u.test(file)),
+      ...architectureChangePaths,
+    ]),
+  ];
   const authorizationSource = baseDocuments ?? [];
-  const workPackages = approvedWorkPackages(authorizationSource);
-  const allowedPaths = workPackages.flatMap((workPackage) =>
-    extractAllowedWritePaths(workPackage.content),
-  );
-  const baselinePathChanged = changedPaths.includes(ARCHITECTURE_BASELINE_PATH);
-  const planningOnlyChange =
-    changedPaths.length > 0 && changedPaths.every((file) => isPlanningOnlyPath(file));
-  const planningChangeAuthorized =
-    planningOnlyChange &&
-    baseDocuments !== undefined &&
-    hasApprovedPlanningBootstrap(baseDocuments);
-  const planningBootstrapAuthorized =
-    baseDocuments !== undefined && hasApprovedPlanningBootstrap(baseDocuments);
-
-  if (baseDocuments !== undefined) {
-    const outOfScope = changedPaths.filter((file) =>
-      baselinePathChanged && file === ARCHITECTURE_BASELINE_PATH
-        ? true
-        : planningChangeAuthorized && isPlanningOnlyPath(file)
-          ? false
-          : planningBootstrapAuthorized && isPlannerPolicyPath(file)
-            ? false
-            : !allowedPaths.some((pattern) => pathMatchesPattern(file, pattern)),
-    );
-    if (outOfScope.length > 0) {
-      addViolation(
-        violations,
-        ARCHITECTURE_CODES.ARCHITECTURE_REVIEW_REQUIRED,
-        `changed paths are outside the approved BASE_SHA Work Package scope: ${outOfScope.join(', ')}`,
-      );
-    }
-  }
 
   const baseContractAuthorization = contractPaths.every(
     (contractPath) =>
@@ -1150,43 +1008,19 @@ export function evaluateContractChanges({
     );
   }
 
-  const manifestScopeAuthorized =
-    manifestPaths.length === 0 ||
-    (workPackages.length > 0 &&
-      manifestPaths.every((file) =>
-        allowedPaths.some((pattern) => pathMatchesPattern(file, pattern)),
-      ));
-  if (manifestPaths.length > 0 && !manifestScopeAuthorized) {
-    addViolation(
-      violations,
-      ARCHITECTURE_CODES.ARCHITECTURE_REVIEW_REQUIRED,
-      'Manifest or controlled package.json changed outside an approved BASE_SHA Work Package scope',
-    );
-  }
-
-  const architectureProtectedPaths = changedPaths.filter(
-    (file) => isManifestPath(file) || isControlledPackagePath(file),
+  const architectureChangeAuthorized = architecturePaths.every(
+    (architecturePath) =>
+      approvedArtifactForPath(
+        authorizationSource,
+        /^docs\/adr\/ADR-\d+[^/]*\.md$/u,
+        architecturePath,
+      ) !== undefined,
   );
-  if (
-    baseDocuments !== undefined &&
-    architectureProtectedPaths.some(
-      (file) =>
-        approvedArtifactForPath(authorizationSource, /^docs\/adr\/ADR-\d+[^/]*\.md$/u, file) ===
-          undefined &&
-        !(isControlledPackagePath(file) && approvedWorkPackageAuthorizesPath(workPackages, file)) &&
-        !workPackages.some(
-          (workPackage) =>
-            workPackage.file === 'docs/work-packages/WP-002-amendment-a1-trust-root.md' &&
-            extractAllowedWritePaths(workPackage.content).some((pattern) =>
-              pathMatchesPattern(file, pattern),
-            ),
-        ),
-    )
-  ) {
+  if (architecturePaths.length > 0 && !architectureChangeAuthorized) {
     addViolation(
       violations,
       ARCHITECTURE_CODES.ARCHITECTURE_REVIEW_REQUIRED,
-      'manifest or controlled package.json changes require an approved BASE_SHA ADR or Architecture Review',
+      'Owner, dependency direction, versioned architecture metadata, or Migration changed without an approved BASE_SHA ADR',
     );
   }
 

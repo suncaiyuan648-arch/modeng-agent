@@ -15,7 +15,7 @@
 7. `docs/future/*`：NON-NORMATIVE，仅为未来讨论。
 8. `docs/source-material/**`：REFERENCE ONLY，仅为历史输入。
 
-`docs/future/**` 和 `docs/source-material/**` 不得作为当前实现需求来源。未经 Work Package 明确授权，不得据此创建 Campaign、Search、Publish、Monitoring、通用 Workflow 或其他未来模块。
+`docs/future/**` 和 `docs/source-material/**` 不得作为当前实现需求来源。没有当前产品任务时，不得据此创建 Campaign、Search、Publish、Monitoring、通用 Workflow 或其他未来模块。
 
 ## 1. Mission
 
@@ -70,15 +70,17 @@
 
 ### GREEN
 
-可在 Work Package 范围内修改：模块内部实现、私有类型、模块测试/Fixture、模块拥有的 Adapter、现有 Contract 后的 UI/Handler 实现。
+可在当前任务范围内直接修改：模块内部实现、私有类型、模块测试/Fixture、模块拥有的 Adapter、现有 Contract 后的 UI/Handler、CSS 和局部配置。
 
 ### YELLOW
 
-仅任务明确授权时修改：`index.ts`、public export、Migration、Manifest、shared fixture、Feature Flag/Retention 配置。
+为完成当前任务确有必要时可以直接修改：`index.ts`、public export、`package.json`、`tsconfig.json`、Manifest 普通元数据、shared fixture、Feature Flag/Retention 配置。
+
+YELLOW 不要求先创建授权文件或暂停编码。交付说明理由，Reviewer 检查必要性、兼容性和是否无意扩大 public surface。
 
 ### RED
 
-没有批准的 Contract Change/ADR 时禁止修改：public `contract.ts`、Command/Event/Artifact/Error Schema、状态机、Owner、依赖方向、owned-table、跨模块 Port、protocol major。
+没有批准的 Contract Change/ADR 时禁止修改：`packages/shared/contracts/src/**` 中的非测试 runtime Contract、明确命名的 versioned Contract/Port/Schema、状态机、Owner、依赖方向、owned-table、Migration、protocol major 和治理 Trust Root。
 
 若实现需要 RED 变化，不得绕过。报告 `CONTRACT_CHANGE_REQUIRED`，说明当前限制、建议变化、影响模块、兼容性和所需测试。
 
@@ -96,7 +98,7 @@
 - 跨网络及序列化 Contract 以 Zod Schema 为真源并推导 TypeScript。
 - 类型通过不代表行为正确；Fake/真实 Adapter 必须通过共同 Conformance Suite。
 - 跨边界错误使用版本化 Platform Error；禁止匹配 `error.message` 决定 UI 或重试。
-- 未授权的 Public Contract 变化必须先提交 Contract Change Proposal。
+- Frozen Public Contract 变化必须先提交 Contract Change Proposal。
 
 ## 8. Testing
 
@@ -124,12 +126,13 @@
 5. 添加/更新的测试与实际运行命令。
 6. 未验证项、剩余风险和回滚方式。
 
-出现未授权 RED/YELLOW 变化或新的架构决策时，任务不能宣布完成，必须进入 Proposal/ADR Review。
+出现未批准的 RED 变化或新的架构决策时，任务不能宣布完成，必须进入 Proposal/ADR Review。YELLOW 变化由当前 PR 的 Reviewer 审查，不要求单独授权回合。
 
 ## Code Review Rules
 
 - 标记不必要的 public surface 扩张、跨模块状态写入、基础设施泄漏、deep import、Contract 绕过和缺失行为测试。
 - Reviewer 建议不能覆盖失败的静态门禁或测试。
+- 只有当前 diff 可复现的 bug、越权、数据风险、验收缺失或架构 invariant 违反可以阻塞；面向假设未来的加固建议记录为 non-blocking follow-up。
 
 ## 10. Secret handling
 

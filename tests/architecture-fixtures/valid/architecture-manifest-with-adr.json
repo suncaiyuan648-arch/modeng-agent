@@ -1,0 +1,11 @@
+{
+  "kind": "contract",
+  "files": ["packages/backend/task-engine/module.manifest.json"],
+  "architectureChangePaths": ["packages/backend/task-engine/module.manifest.json"],
+  "baseDocuments": [
+    {
+      "file": "docs/adr/ADR-0002-task-owner.md",
+      "content": "# ADR-0002: Task Owner\n\n- Status: APPROVED\n\n## Authorization\n- packages/backend/task-engine/module.manifest.json"
+    }
+  ]
+}

@@ -5,6 +5,10 @@
 - Deciders：
 - Related CR/WP：
 
+## Authorization
+
+- `<exact RED path changed by this ADR>`
+
 ## Context
 
 为什么 Architecture Baseline 无法满足？

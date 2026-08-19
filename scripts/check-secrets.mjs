@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import process from 'node:process';
 
 const MAX_FILE_BYTES = 1_000_000;
@@ -59,11 +59,14 @@ function gitFileList(staged) {
   return [...new Set(output.split('\0').filter(Boolean))];
 }
 
-function readGitFile(file, staged) {
+export function readGitFile(file, staged) {
   if (staged) {
     return execFileSync('git', ['show', `:${file}`], { encoding: 'utf8' });
   }
 
+  if (!existsSync(file)) {
+    return null;
+  }
   const stats = statSync(file);
   if (!stats.isFile() || stats.size > MAX_FILE_BYTES) {
     return null;

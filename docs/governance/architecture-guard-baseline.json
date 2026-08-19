@@ -42,8 +42,35 @@
   "basePolicy": {
     "environmentVariable": "ARCH_BASE_SHA",
     "missingBaseAction": "fail-closed",
-    "localFallback": "forbidden"
+    "localFallback": "merge-base with origin/main or main"
   },
+  "trustRootPaths": [
+    "AGENTS.md",
+    "AI工程治理与Work-Package规范.md",
+    ".github/workflows/**",
+    ".github/CODEOWNERS",
+    "docs/adr/ADR-template.md",
+    "docs/governance/**",
+    "docs/work-packages/README.md",
+    "scripts/architecture-guard.mjs",
+    "scripts/check-architecture.mjs",
+    "scripts/check-architecture-fixtures.mjs",
+    "scripts/check-boundaries.mjs",
+    "scripts/check-public-api.mjs",
+    "scripts/check-contract-changes.mjs",
+    "scripts/check-module-manifest.mjs",
+    "scripts/check-secrets.mjs",
+    "scripts/repository.mjs",
+    "scripts/trusted-governance-check.mjs",
+    "eslint.config.mjs",
+    "pnpm-workspace.yaml",
+    "tsconfig.base.json",
+    "vitest.config.ts",
+    "tests/architecture/**",
+    "tests/architecture-fixtures/**",
+    "tests/governance/**",
+    "tests/security/**"
+  ],
   "protectedGovernancePaths": [
     "AGENTS.md",
     ".github/workflows/**",
