@@ -914,7 +914,7 @@ export function validateContractChangeProposal(file, content) {
 }
 
 const explicitlyNamedContractPattern =
-  /^(?:apps|packages)\/.*\/src\/(?:[^/]*(?:contract|schema|port|state[-_]machine|operation-status)[^/]*)\.(?:ts|tsx|mts|cts|json)$/iu;
+  /^(?:apps|packages)\/.*\/src\/(?:(?:contracts?|ports?|schemas?)\/.*|[^/]*(?:contract|schema|port|state[-_]machine|operation-status)[^/]*)\.(?:ts|tsx|mts|cts|json)$/iu;
 
 export function isFrozenContractPath(file) {
   const testOrFixture =
