@@ -239,6 +239,54 @@ describe('Architecture Guard regressions', () => {
     ).toEqual([]);
   });
 
+  it('allows only the approved Agent UI stylesheet and resolves NodeNext facade exports', () => {
+    const module = {
+      group: 'packages',
+      name: 'agent-ui',
+      relative: 'frontend/agent-ui',
+      root: '/repo/packages/frontend/agent-ui',
+    };
+    const manifest = {
+      publicExports: ['.', './styles.css'],
+      publicContractFiles: ['src/index.ts', 'src/components.tsx'],
+    };
+    const sourceFiles = [
+      {
+        path: '/repo/packages/frontend/agent-ui/src/components.tsx',
+        content: 'export const Composer = () => null;',
+      },
+    ];
+
+    expect(
+      analyzePublicApi({
+        module,
+        manifest,
+        packageJson: {
+          exports: {
+            '.': { types: './dist/index.d.ts', import: './dist/index.js' },
+            './styles.css': './src/styles.css',
+          },
+        },
+        indexSource: "export { Composer } from './components.js';",
+        sourceFiles,
+      }),
+    ).toEqual([]);
+
+    expect(
+      codes(
+        analyzePublicApi({
+          module,
+          manifest,
+          packageJson: {
+            exports: { '.': './dist/index.js', './styles.css': './src/other.css' },
+          },
+          indexSource: "export { Composer } from './components.js';",
+          sourceFiles,
+        }),
+      ),
+    ).toContain('ARCH009');
+  });
+
   it('rejects unsupported module loading syntax with ARCH012', () => {
     for (const source of [
       "const loaded = require('./internal/debug');",

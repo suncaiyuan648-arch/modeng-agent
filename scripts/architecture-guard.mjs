@@ -40,6 +40,10 @@ const tableWritePatterns = [
   /\bprisma\.([A-Za-z_][A-Za-z0-9_]*)\.(?:create|update|delete|upsert|createMany|updateMany|deleteMany)\b/g,
 ];
 
+const approvedPublicSubpathTargets = Object.freeze({
+  'frontend/agent-ui': Object.freeze({ './styles.css': './src/styles.css' }),
+});
+
 export class ArchitectureViolation extends Error {
   constructor(code, message) {
     super(`${code} ${message}`);
@@ -77,6 +81,10 @@ function verifyRef(runGit, ref) {
 
 function normalizePath(file) {
   return file.replaceAll('\\', '/');
+}
+
+function isApprovedPublicSubpath(module, key, target) {
+  return approvedPublicSubpathTargets[module.relative]?.[key] === target;
 }
 
 function parseDiffEntries(output) {
@@ -822,8 +830,17 @@ export function analyzePublicApi({
   collectTargets(exportsObject);
 
   if (
-    exportKeys.some((key) => key !== '.' || key.includes('*') || key.includes('/internal')) ||
-    manifestKeys.some((key) => key !== '.' || key.includes('*')) ||
+    exportKeys.some(
+      (key) =>
+        (key !== '.' && !isApprovedPublicSubpath(module, key, exportsObject[key])) ||
+        key.includes('*') ||
+        key.includes('/internal'),
+    ) ||
+    manifestKeys.some(
+      (key) =>
+        (key !== '.' && !isApprovedPublicSubpath(module, key, exportsObject[key])) ||
+        key.includes('*'),
+    ) ||
     exportTargets.some((target) => target.includes('*') || isInternalPath(target))
   ) {
     addViolation(
@@ -882,7 +899,17 @@ function isInternalPath(specifier) {
 
 function resolveSourceMapPath(currentFile, specifier, sourceMap) {
   const base = path.posix.normalize(path.posix.join(path.posix.dirname(currentFile), specifier));
-  const candidates = [base, `${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}/index.ts`];
+  const extension = path.posix.extname(base);
+  const extensionlessBase = ['.js', '.jsx', '.mjs', '.cjs'].includes(extension)
+    ? base.slice(0, -extension.length)
+    : base;
+  const candidates = [
+    base,
+    `${extensionlessBase}.ts`,
+    `${extensionlessBase}.tsx`,
+    `${extensionlessBase}.js`,
+    `${extensionlessBase}/index.ts`,
+  ];
   return candidates.find((candidate) => sourceMap.has(candidate));
 }
 
