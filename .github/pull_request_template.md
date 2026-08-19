@@ -1,9 +1,9 @@
 ## Scope
 
-- [ ] 变更仅限 Work Package 请求范围。
+- [ ] 每项变更都能由当前目标或验收解释。
 - [ ] 已列出非目标，没有无关重构。
 
-Work Package：  
+Task / Work Package：
 目标模块：
 
 ## Deep Module
@@ -16,11 +16,11 @@ Work Package：
 
 ## Contracts and architecture
 
-- [ ] Public Contract、状态机、Owner 和依赖方向未改变。
+- [ ] Frozen Contract、状态机、Owner、依赖方向和 Migration 未改变。
 
 或：
 
-- [ ] 变化已有批准记录：CR/ADR ________。
+- [ ] RED 变化已有批准记录：CCR/ADR ________。
 - [ ] Schema/Fixture/Conformance/Migration 与兼容窗口已经更新。
 
 ## Data and infrastructure

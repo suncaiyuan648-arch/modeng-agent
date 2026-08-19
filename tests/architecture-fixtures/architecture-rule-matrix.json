@@ -36,12 +36,7 @@
     "public-export-transitive-internal"
   ],
   "ARCH010": ["manifest-contract-mismatch", "package-dependency-mismatch"],
-  "ARCH011": [
-    "manifest-without-review",
-    "historical-wp-cannot-authorize",
-    "package-json-without-authorization",
-    "package-json-current-wp-cannot-authorize"
-  ],
+  "ARCH011": ["architecture-manifest-change-without-adr", "migration-without-adr"],
   "ARCH012": [
     "unsupported-require",
     "unsupported-import-equals",

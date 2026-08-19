@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 // @ts-expect-error Architecture Guard is executable ESM without a generated declaration file.
@@ -6,19 +8,18 @@ import {
   analyzePublicApi,
   computeChangeRange,
   evaluateContractChanges,
-  extractAllowedWritePaths,
-  hasApprovedPlanningBootstrap,
   isFrozenContractPath,
   isDeepImportSpecifier,
-  isPlanningOnlyPath,
   parseImportReferences,
   parseImports,
-  pathMatchesPattern,
 } from '../../scripts/architecture-guard.mjs';
 // @ts-expect-error Fixture runner is executable ESM without a generated declaration file.
 import { evaluateFixtureResults } from '../../scripts/check-architecture-fixtures.mjs';
 // @ts-expect-error Contract checker is executable ESM without a generated declaration file.
-import { readBaseAuthorizationDocuments } from '../../scripts/check-contract-changes.mjs';
+import {
+  detectManifestDecisionPaths,
+  readBaseAuthorizationDocuments,
+} from '../../scripts/check-contract-changes.mjs';
 // @ts-expect-error Aggregator is executable ESM without a generated declaration file.
 import {
   MANDATORY_CHECKS,
@@ -260,25 +261,25 @@ describe('Architecture Guard regressions', () => {
   });
 });
 
-describe('Base-SHA authorization', () => {
-  it('classifies only the shared-contracts root as frozen for WP-003 scope', () => {
+describe('Rules Lite contract and architecture review', () => {
+  it('freezes shared and explicitly named contracts without freezing ordinary facades', () => {
     expect(isFrozenContractPath('packages/shared/contracts/src/index.ts')).toBe(true);
     expect(isFrozenContractPath('packages/shared/contracts/README.md')).toBe(false);
     expect(isFrozenContractPath('packages/shared/contracts/src/index.test.ts')).toBe(false);
-    expect(isFrozenContractPath('packages/backend/task-engine/src/index.ts')).toBe(true);
+    expect(isFrozenContractPath('packages/backend/task-engine/src/index.ts')).toBe(false);
     expect(isFrozenContractPath('packages/backend/task-engine/src/task-contract.ts')).toBe(true);
+    expect(isFrozenContractPath('packages/backend/task-engine/src/execution-port.ts')).toBe(true);
     expect(isFrozenContractPath('packages/backend/task-engine/src/index.test.ts')).toBe(false);
+    expect(isFrozenContractPath('packages/backend/task-engine/src/task-contract.test.ts')).toBe(
+      false,
+    );
+    expect(
+      isFrozenContractPath('packages/backend/task-engine/src/internal/provider-schema.ts'),
+    ).toBe(false);
   });
 
-  it('keeps WP-003 README and test paths scoped without weakening CCR authorization', () => {
-    const workPackage = {
-      file: 'docs/work-packages/WP-003-contract-kernel.md',
-      content:
-        '# WP-003\n\n- Status: APPROVED\n\n## Allowed write paths\n' +
-        '- `packages/shared/contracts/src/**/*.test.ts`\n' +
-        '- `packages/shared/contracts/README.md`\n' +
-        '- `packages/shared/contracts/src/index.ts`',
-    };
+  it('allows GREEN/YELLOW paths and requires a BASE CCR only for Frozen Contracts', () => {
+    const contract = 'packages/shared/contracts/src/index.ts';
     const ccr = {
       file: 'docs/contract-changes/CCR-0001.md',
       content:
@@ -289,7 +290,7 @@ describe('Base-SHA authorization', () => {
         '- Proposed version: 1.0.0\n' +
         '- Compatibility: breaking-major\n' +
         '- Status: APPROVED\n\n' +
-        '## Authorization\n- packages/shared/contracts/src/index.ts\n\n' +
+        `## Authorization\n- ${contract}\n\n` +
         '## Problem\nProblem.\n\n' +
         '## Proposed change\nChange.\n\n' +
         '## Compatibility and affected modules\n- Consumers.\n\n' +
@@ -297,94 +298,72 @@ describe('Base-SHA authorization', () => {
         '## Migration / rollout / rollback\n- Rollout.',
     };
 
-    expect(
-      evaluateContractChanges({
-        entries: [{ status: 'M', paths: ['packages/shared/contracts/README.md'] }],
-        baseDocuments: [workPackage],
-      }),
-    ).toEqual([]);
-    expect(
-      evaluateContractChanges({
-        entries: [{ status: 'M', paths: ['packages/shared/contracts/src/index.test.ts'] }],
-        baseDocuments: [workPackage],
-      }),
-    ).toEqual([]);
+    const yellowPaths = [
+      'packages/backend/task-engine/src/index.ts',
+      'packages/backend/task-engine/package.json',
+      'packages/backend/task-engine/module.manifest.json',
+      'packages/backend/task-engine/tsconfig.json',
+      'pnpm-lock.yaml',
+    ];
+    expect(evaluateContractChanges({ files: yellowPaths, baseDocuments: [] })).toEqual([]);
     expect(
       codes(
         evaluateContractChanges({
-          entries: [{ status: 'M', paths: ['packages/shared/contracts/src/index.ts'] }],
-          baseDocuments: [workPackage],
+          entries: [{ status: 'M', paths: [contract] }],
+          baseDocuments: [],
         }),
       ),
     ).toContain('ARCH006');
     expect(
       evaluateContractChanges({
-        entries: [{ status: 'M', paths: ['packages/shared/contracts/src/index.ts'] }],
-        baseDocuments: [workPackage, ccr],
+        entries: [{ status: 'M', paths: [contract] }],
+        baseDocuments: [ccr],
       }),
     ).toEqual([]);
   });
 
-  it('authorizes explicit root lockfile and matches globstars without widening ordinary stars', () => {
-    const workPackage = {
-      file: 'docs/work-packages/WP-003-contract-kernel.md',
+  it('requires an approved BASE ADR for architecture fields and migrations', () => {
+    const manifest = 'packages/backend/task-engine/module.manifest.json';
+    const migration = 'prisma/migrations/20260819_add_task/migration.sql';
+    const adr = {
+      file: 'docs/adr/ADR-0002-task-owner.md',
       content:
-        '# WP-003\n\n- Status: APPROVED / PLANNING RECORD\n\n## Allowed write paths\n' +
-        '- `packages/shared/contracts/src/**/*.test.ts`\n' +
-        '- `pnpm-lock.yaml`',
+        '# ADR-0002\n\n- Status: APPROVED\n\n## Authorization\n' + `- ${manifest}\n- ${migration}`,
     };
-    const testPattern = 'packages/shared/contracts/src/**/*.test.ts';
-
-    expect(extractAllowedWritePaths(workPackage.content)).toEqual([testPattern, 'pnpm-lock.yaml']);
-    expect(pathMatchesPattern('packages/shared/contracts/src/index.test.ts', testPattern)).toBe(
-      true,
-    );
-    expect(pathMatchesPattern('packages/shared/contracts/src/foo/index.test.ts', testPattern)).toBe(
-      true,
-    );
     expect(
-      pathMatchesPattern('packages/shared/contracts/src/foo/bar/index.test.ts', testPattern),
-    ).toBe(true);
-    expect(
-      pathMatchesPattern(
-        'packages/shared/contracts/src/foo/bar.test.ts',
-        'packages/shared/contracts/src/*.test.ts',
+      codes(
+        evaluateContractChanges({
+          files: [manifest, migration],
+          architectureChangePaths: [manifest],
+          baseDocuments: [],
+        }),
       ),
-    ).toBe(false);
-
+    ).toEqual(['ARCH011']);
     expect(
       evaluateContractChanges({
-        entries: [{ status: 'M', paths: ['pnpm-lock.yaml'] }],
-        baseDocuments: [workPackage],
+        files: [manifest, migration],
+        architectureChangePaths: [manifest],
+        baseDocuments: [adr],
       }),
     ).toEqual([]);
-    expect(
-      codes(
-        evaluateContractChanges({
-          entries: [{ status: 'M', paths: ['unrelated-root.txt'] }],
-          baseDocuments: [workPackage],
-        }),
-      ),
-    ).toContain('ARCH011');
-    expect(
-      codes(
-        evaluateContractChanges({
-          entries: [{ status: 'M', paths: ['packages/shared/contracts/README.md'] }],
-          baseDocuments: [workPackage],
-        }),
-      ),
-    ).toContain('ARCH011');
-    expect(
-      codes(
-        evaluateContractChanges({
-          entries: [{ status: 'M', paths: [workPackage.file] }],
-          baseDocuments: [workPackage],
-        }),
-      ),
-    ).toContain('ARCH011');
   });
 
-  it('uses PR base and parses A/M/D/R status entries without bootstrap fallback', () => {
+  it('accepts the repository ADR template status spelling', () => {
+    const manifest = 'packages/backend/task-engine/module.manifest.json';
+    const adr = {
+      file: 'docs/adr/ADR-0002-task-owner.md',
+      content: `# ADR-0002\n\n- Status：accepted\n\n## Authorization\n- ${manifest}`,
+    };
+    expect(
+      evaluateContractChanges({
+        files: [manifest],
+        architectureChangePaths: [manifest],
+        baseDocuments: [adr],
+      }),
+    ).toEqual([]);
+  });
+
+  it('uses an explicit CI base and parses A/M/D/R status entries', () => {
     const calls: string[][] = [];
     const runGit = (args: string[]) => {
       calls.push(args);
@@ -396,17 +375,21 @@ describe('Base-SHA authorization', () => {
     const range = computeChangeRange({ env: { ARCH_BASE_SHA: 'pr-base' }, runGit });
     expect(range.files).toEqual(['old/path.md', 'new/path.md', 'removed.md']);
     expect(range.entries.map((entry) => entry.status)).toEqual(['R', 'D']);
-    expect(calls.some((args) => args.includes('bootstrap-v0.1.0'))).toBe(false);
+    expect(range.source).toBe('explicit-ARCH_BASE_SHA');
   });
 
-  it('does not infer a baseline from local main or origin/main', () => {
+  it('uses a local main merge-base when ARCH_BASE_SHA is absent', () => {
     const calls: string[][] = [];
     const runGit = (args: string[]) => {
       calls.push(args);
-      return { status: 0, stdout: 'main-sha\n', stderr: '' };
+      if (args[0] === 'rev-parse') return { status: 0, stdout: 'main-sha\n', stderr: '' };
+      if (args[0] === 'merge-base') return { status: 0, stdout: 'base-sha\n', stderr: '' };
+      return { status: 0, stdout: '', stderr: '' };
     };
-    expect(() => computeChangeRange({ env: {}, runGit })).toThrow('ARCH_BASELINE_MISSING');
-    expect(calls).toEqual([]);
+    const range = computeChangeRange({ env: {}, runGit });
+    expect(range.baseRef).toBe('base-sha');
+    expect(range.source).toBe('local-merge-base:origin/main');
+    expect(calls.some((args) => args[0] === 'merge-base')).toBe(true);
   });
 
   it('fails closed when neither PR base nor local main refs are available', () => {
@@ -414,179 +397,58 @@ describe('Base-SHA authorization', () => {
     expect(() => computeChangeRange({ env: {}, runGit })).toThrow('ARCH_BASELINE_MISSING');
   });
 
-  it('rejects current WP/CCR edits and accepts only approved artifacts from BASE_SHA', () => {
-    const manifest = 'packages/backend/task-engine/module.manifest.json';
-    const contract = 'packages/shared/contracts/src/index.ts';
-    const approvedWp = {
-      file: 'docs/work-packages/WP-002-architecture-guard.md',
-      content:
-        '# WP-002\n\n- Status: APPROVED\n\n## Allowed implementation paths\n- ' +
-        manifest +
-        '\n- ' +
-        contract,
-    };
-    const approvedCcr = {
-      file: 'docs/contract-changes/CCR-0005.md',
-      content:
-        '# CR-0005: Add contract\n\n- Contract owner: shared-contracts\n- Requested by: WP-002\n- Current version: 0.0.0\n- Proposed version: 0.1.0\n- Compatibility: additive-minor\n- Status: APPROVED\n\n## Authorization\n- ' +
-        contract +
-        '\n\n## Problem\nProblem.\n\n## Proposed change\nChange.\n\n## Compatibility and affected modules\n- Consumers.\n\n## Fixtures and conformance\n- Fixture.\n\n## Migration / rollout / rollback\n- Rollout.',
-    };
-    const approvedAdr = {
-      file: 'docs/adr/ADR-0001-manifest-scope.md',
-      content:
-        '# ADR-0001: Manifest scope\n\n- Status: APPROVED\n\n## Authorization\n- ' + manifest,
-    };
-
-    expect(
-      evaluateContractChanges({
-        entries: [{ status: 'M', paths: [manifest] }],
-        baseDocuments: [approvedWp, approvedAdr],
-      }),
-    ).toEqual([]);
-    expect(
-      codes(
-        evaluateContractChanges({
-          entries: [{ status: 'M', paths: [manifest, approvedWp.file] }],
-          baseDocuments: [approvedWp],
-          workPackages: [
-            {
-              file: approvedWp.file,
-              content: approvedWp.content + '\n## Authorization\n- ' + manifest,
-            },
-          ],
-        }),
-      ),
-    ).toContain('ARCH011');
-    expect(
-      codes(
-        evaluateContractChanges({
-          entries: [{ status: 'M', paths: [contract] }],
-          baseDocuments: [approvedWp, approvedCcr],
-        }),
-      ),
-    ).toEqual([]);
-    expect(
-      codes(
-        evaluateContractChanges({
-          entries: [{ status: 'M', paths: [contract, approvedCcr.file] }],
-          baseDocuments: [approvedWp, approvedCcr],
-          proposals: [{ file: approvedCcr.file, content: approvedCcr.content }],
-        }),
-      ),
-    ).toContain('ARCH011');
-  });
-
-  it('allows only planning paths after an approved GOV-001 bootstrap is in BASE_SHA', () => {
-    const bootstrap = {
-      file: 'docs/governance/GOV-001-execution-planning-bootstrap.md',
-      content: '> STATUS: APPROVED / GOVERNANCE BOOTSTRAP',
-    };
-    expect(hasApprovedPlanningBootstrap([bootstrap])).toBe(true);
-    expect(isPlanningOnlyPath('docs/roadmap/IMPLEMENTATION.md')).toBe(true);
-    expect(isPlanningOnlyPath('docs/work-packages/WP-003-contract-kernel.md')).toBe(true);
-    expect(isPlanningOnlyPath('docs/contract-changes/CCR-0006.md')).toBe(true);
-    expect(isPlanningOnlyPath('docs/contract-changes/CCR-not-numbered.md')).toBe(false);
-    expect(isPlanningOnlyPath('docs/work-packages/WP-002-architecture-guard.md')).toBe(false);
-    expect(isPlanningOnlyPath('docs/governance/architecture-guard-baseline.json')).toBe(false);
-
-    expect(
-      evaluateContractChanges({
-        entries: [
-          {
-            status: 'A',
-            paths: [
-              'docs/roadmap/IMPLEMENTATION.md',
-              'docs/work-packages/WP-003-contract-kernel.md',
-            ],
-          },
-        ],
-        baseDocuments: [bootstrap],
-      }),
-    ).toEqual([]);
-
-    expect(
-      evaluateContractChanges({
-        entries: [{ status: 'A', paths: ['docs/contract-changes/CCR-0006.md'] }],
-        baseDocuments: [bootstrap],
-      }),
-    ).toEqual([]);
-
-    const approvedWp = {
-      file: 'docs/work-packages/WP-003-contract-kernel.md',
-      content:
-        '# WP-003\n\n- Status: APPROVED\n\n## Allowed write paths\n- ' +
-        'packages/shared/contracts/src/index.ts',
-    };
-    const mixedContractChange = evaluateContractChanges({
-      entries: [
-        { status: 'A', paths: ['docs/contract-changes/CCR-0006.md'] },
-        { status: 'M', paths: ['packages/shared/contracts/src/index.ts'] },
-      ],
-      baseDocuments: [bootstrap, approvedWp],
-    });
-    expect(codes(mixedContractChange)).toContain('ARCH006');
-  });
-
-  it('rejects planning paths without BASE authorization or mixed with implementation', () => {
-    const bootstrap = {
-      file: 'docs/governance/GOV-001-execution-planning-bootstrap.md',
-      content: '> STATUS: APPROVED / GOVERNANCE BOOTSTRAP',
-    };
-    expect(
-      codes(
-        evaluateContractChanges({
-          entries: [{ status: 'A', paths: ['docs/roadmap/IMPLEMENTATION.md'] }],
-          baseDocuments: [],
-        }),
-      ),
-    ).toContain('ARCH011');
-    expect(
-      codes(
-        evaluateContractChanges({
-          entries: [
-            {
-              status: 'A',
-              paths: ['docs/roadmap/IMPLEMENTATION.md', 'scripts/architecture-guard.mjs'],
-            },
-          ],
-          baseDocuments: [bootstrap],
-        }),
-      ),
-    ).toContain('ARCH011');
-  });
-
-  it('loads GOV planning authorization from BASE documents', async () => {
+  it('loads only CCR and ADR review records from BASE', async () => {
     const runGit = (args: string[]) => {
       if (args[0] === 'ls-tree') {
         return {
           status: 0,
           stdout:
-            'docs/governance/GOV-001-execution-planning-bootstrap.md\n' +
-            'docs/work-packages/WP-003-contract-kernel.md\n',
+            'docs/contract-changes/CCR-0002.md\n' +
+            'docs/adr/ADR-0002-owner.md\n' +
+            'docs/work-packages/WP-004.md\n',
           stderr: '',
         };
       }
-      if (args[0] === 'show' && args[1]?.includes('GOV-001')) {
-        return {
-          status: 0,
-          stdout: '> STATUS: APPROVED / GOVERNANCE BOOTSTRAP',
-          stderr: '',
-        };
-      }
-      return { status: 0, stdout: '# WP-003\n- Status: APPROVED', stderr: '' };
+      return { status: 0, stdout: `record for ${args[1]}`, stderr: '' };
     };
 
     await expect(readBaseAuthorizationDocuments('base', runGit)).resolves.toEqual([
       {
-        file: 'docs/governance/GOV-001-execution-planning-bootstrap.md',
-        content: '> STATUS: APPROVED / GOVERNANCE BOOTSTRAP',
+        file: 'docs/contract-changes/CCR-0002.md',
+        content: 'record for base:docs/contract-changes/CCR-0002.md',
       },
       {
-        file: 'docs/work-packages/WP-003-contract-kernel.md',
-        content: '# WP-003\n- Status: APPROVED',
+        file: 'docs/adr/ADR-0002-owner.md',
+        content: 'record for base:docs/adr/ADR-0002-owner.md',
       },
     ]);
+  });
+
+  it('detects RED manifest fields while leaving ordinary metadata YELLOW', () => {
+    const file = 'packages/backend/task-engine/module.manifest.json';
+    const current = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    const changedArchitecture = { ...current, allowedDependencies: [] };
+    const changedContract = { ...current, contracts: [{ name: 'TaskPort', version: '1' }] };
+    const runGit = (args: string[]) => {
+      if (args[0] !== 'show') return { status: 1, stdout: '', stderr: '' };
+      return { status: 0, stdout: JSON.stringify(changedArchitecture), stderr: '' };
+    };
+    expect(
+      detectManifestDecisionPaths({ entries: [{ paths: [file] }], baseRef: 'base', runGit }),
+    ).toEqual({ architectureChangePaths: [file], contractChangePaths: [] });
+
+    const contractGit = () => ({
+      status: 0,
+      stdout: JSON.stringify(changedContract),
+      stderr: '',
+    });
+    expect(
+      detectManifestDecisionPaths({
+        entries: [{ paths: [file] }],
+        baseRef: 'base',
+        runGit: contractGit,
+      }),
+    ).toEqual({ architectureChangePaths: [], contractChangePaths: [file] });
   });
 });
 
@@ -657,7 +519,6 @@ describe('Architecture inventory', () => {
         headWorkflow: `on:\n  pull_request_target:\n    - opened\nenv:\n  ARCH_BASE_SHA: base\n  ARCH_HEAD_SHA: head\n- uses: actions/checkout@v4\n  with:\n    ref: \${{ github.event.pull_request.base.sha }}\n- run: node scripts/trusted-governance-check.mjs`,
         headNormalWorkflow: 'on:\n  pull_request:\nenv:\n  ARCH_BASE_SHA: base\n- run: pnpm verify',
         changedPaths: ['scripts/check-architecture-fixtures.mjs'],
-        allowedPaths: ['scripts/**'],
       }),
     ).toEqual([]);
     expect(validateFixtureMatrixIntegrity({ ARCH001: ['fixture'] }, { ARCH001: [] })).toEqual([

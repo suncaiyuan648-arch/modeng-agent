@@ -1,20 +1,19 @@
-# Future Work Package Planning Records
+# Work Package Delivery Notes
 
-This directory contains Work Package planning and approval records. A planning
-record is not an implementation permission until it has been reviewed, merged to
-`main`, and included in the implementation branch's `BASE_SHA`.
+This directory contains product delivery notes. A Work Package describes the
+goal, non-goals, acceptance criteria, architecture constraints, and expected
+change areas. It is not a machine-readable file permission token.
 
-## Required separation
+## Recommended flow
 
-Use two separate changes:
+Use a separate planning change only when a RED decision must land first:
 
-1. planning PR: add or approve the Work Package record;
-2. implementation PR: implement only the scope authorized by the record already
-   present in `main`.
+1. ordinary GREEN/YELLOW work: plan and implementation may ship in one PR;
+2. Frozen Contract, Owner/dependency direction, Migration, or governance change:
+   merge the CCR/ADR/owner decision before the dependent implementation.
 
-The current implementation diff may not add or edit a Work Package record to
-self-authorize its own changes. Frozen records are immutable during implementation;
-scope changes require a new planning approval.
+Reviewers judge scope from the requested outcome and actual diff. CI deliberately
+does not parse Allowed Paths, Active WP, capability grants, or readiness metadata.
 
 ## Minimum planning record
 
@@ -22,11 +21,10 @@ Each future record should state:
 
 - Owner, reviewer, phase, and status;
 - goal and explicit non-goals;
-- allowed write paths and forbidden paths;
+- expected change areas and explicit non-goals;
 - protected Contract/Manifest/Architecture change classes;
-- governance prerequisites: Frozen Contract touched, CCR required, ADR required,
-  Manifest change required, Architecture change required, and State-machine
-  change required;
+- RED prerequisites: Frozen Contract, Owner/dependency direction, Migration,
+  governance Trust Root, or state-machine change;
 - acceptance criteria and verification commands;
 - implementation handoff and freeze conditions.
 
@@ -41,9 +39,8 @@ Every Work Package planning record must state these prerequisites explicitly:
 - Architecture change required
 - State-machine change required
 
-This is declarative planning metadata. It documents which approval artifacts
-must be reviewed before implementation; it does not add an automatic
-prerequisite checker.
+This is planning metadata for humans and AI reviewers. It does not add an
+automatic prerequisite or path-authorization checker.
 
 The central status and ordering live in
 [`../roadmap/IMPLEMENTATION.md`](../roadmap/IMPLEMENTATION.md); detailed contracts

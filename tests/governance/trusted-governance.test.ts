@@ -1,37 +1,31 @@
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { describe, expect, it } from 'vitest';
 
 // @ts-expect-error Trusted Governance is executable ESM without generated declarations.
 import {
+  pathMatchesPattern,
   validateBaselineIntegrity,
   validateFixtureMatrixIntegrity,
   validateNormalWorkflow,
+  validateRootPackageScripts,
   validateTrustedHead,
   validateTrustedWorkflow,
-  extractAllowedPaths as extractTrustedAllowedPaths,
-  pathMatchesPattern as trustedPathMatchesPattern,
 } from '../../scripts/trusted-governance-check.mjs';
-
-const fixtureDirectory = resolve(dirname(fileURLToPath(import.meta.url)), 'fixtures');
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-
-function readFixture(name: string) {
-  return JSON.parse(readFileSync(resolve(fixtureDirectory, name), 'utf8')) as {
-    changedEntries: Array<{ status: string; paths: string[] }>;
-    baseFiles: string[];
-    basePlanningBootstrap: string;
-    expected: string;
-  };
-}
 
 const baseline = {
   mandatoryChecks: ['scripts/check-architecture-fixtures.mjs'],
   mandatoryRuleIds: ['ARCH001'],
   mandatoryTestSuites: ['architecture-fixture-integrity'],
   protectedGovernancePaths: ['tests/governance/**'],
+  trustRootPaths: [
+    'AGENTS.md',
+    'AI工程治理与Work-Package规范.md',
+    '.github/workflows/**',
+    'scripts/architecture-guard.mjs',
+    'scripts/repository.mjs',
+    'docs/work-packages/README.md',
+    'tests/architecture/**',
+    'tests/governance/**',
+  ],
   publicEntryPolicy: {
     rootOnlyByDefault: true,
     transitiveUndeclaredReExport: 'forbidden',
@@ -53,12 +47,25 @@ steps:
 `;
 
 const normalWorkflow = 'on:\n  pull_request:\nenv:\n  ARCH_BASE_SHA: base\n- run: pnpm verify';
+const rootPackage = {
+  scripts: {
+    'format:check': 'prettier --check .',
+    'security:scan': 'node scripts/check-secrets.mjs',
+    lint: 'eslint .',
+    typecheck: 'pnpm -r typecheck',
+    test: 'vitest run',
+    'architecture:check': 'node scripts/check-architecture.mjs',
+    build: 'pnpm -r build',
+    verify: 'pnpm lint && pnpm test',
+  },
+};
 
-const trustedHeadFixtureDefaults = {
+const defaults = {
   baseBaseline: baseline,
   headBaseline: baseline,
   headFiles: [
     'scripts/check-architecture-fixtures.mjs',
+    'scripts/architecture-guard.mjs',
     'tests/governance/trusted-governance.test.ts',
     'tests/architecture/architecture-guard.test.ts',
     'tests/architecture-fixtures/architecture-rule-matrix.json',
@@ -70,64 +77,64 @@ const trustedHeadFixtureDefaults = {
   headMatrix: { ARCH001: ['deep-import'] },
   headWorkflow: trustedWorkflow,
   headNormalWorkflow: normalWorkflow,
-  allowedPaths: ['scripts/**', 'tests/**'],
+  baseRootPackage: rootPackage,
+  headRootPackage: rootPackage,
 };
 
-describe('trusted governance checks', () => {
-  it('accepts only the two approved Work Package statuses', () => {
-    const allowedPath = 'packages/shared/contracts/src/index.ts';
-    const documentForStatus = (status: string) => ({
-      content: `# WP-003\n\n- Status: ${status}\n\n## Allowed implementation paths\n- \`${allowedPath}\``,
-    });
-
-    expect(extractTrustedAllowedPaths([documentForStatus('APPROVED')])).toEqual([allowedPath]);
-    expect(extractTrustedAllowedPaths([documentForStatus('APPROVED / PLANNING RECORD')])).toEqual([
-      allowedPath,
-    ]);
-    expect(extractTrustedAllowedPaths([documentForStatus('COMPLETED')])).toEqual([]);
-    expect(
-      extractTrustedAllowedPaths([documentForStatus('APPROVED / GOVERNANCE BOOTSTRAP')]),
-    ).toEqual([]);
-  });
-
-  it('passes the actual WP-003 planning status and an approved implementation path', () => {
-    const planningRecordPath = 'docs/work-packages/WP-003-contract-kernel.md';
-    const implementationPath = 'packages/shared/contracts/src/index.ts';
-    const planningRecord = readFileSync(resolve(repositoryRoot, planningRecordPath), 'utf8');
-    const allowedPaths = extractTrustedAllowedPaths([
-      { file: planningRecordPath, content: planningRecord },
-    ]);
-
-    expect(planningRecord).toContain('- Status: APPROVED / PLANNING RECORD');
-    expect(allowedPaths).toContain(implementationPath);
+describe('Rules Lite trusted governance', () => {
+  it('allows ordinary product and YELLOW metadata changes without a Work Package grant', () => {
     expect(
       validateTrustedHead({
-        ...trustedHeadFixtureDefaults,
-        changedPaths: [implementationPath],
-        changedEntries: [{ status: 'M', paths: [implementationPath] }],
-        baseFiles: [implementationPath, 'docs/roadmap/IMPLEMENTATION.md'],
-        allowedPaths,
+        ...defaults,
+        changedPaths: [
+          'packages/frontend/agent-ui/src/index.ts',
+          'packages/frontend/agent-ui/package.json',
+          'packages/frontend/agent-ui/module.manifest.json',
+          'packages/frontend/agent-ui/tsconfig.json',
+        ],
       }),
     ).toEqual([]);
   });
 
-  it('rejects weakened baseline and removed fixture inventory', () => {
+  it('blocks only governance Trust Root changes for repository-owner handling', () => {
+    const failures = validateTrustedHead({
+      ...defaults,
+      changedPaths: [
+        'AGENTS.md',
+        'scripts/architecture-guard.mjs',
+        'scripts/repository.mjs',
+        'tests/governance/trusted-governance.test.ts',
+      ],
+    });
+    expect(failures).toEqual([
+      'TRUSTED_GOVERNANCE_CHANGE AGENTS.md requires repository-owner review and merge-gate bypass',
+      'TRUSTED_GOVERNANCE_CHANGE scripts/architecture-guard.mjs requires repository-owner review and merge-gate bypass',
+      'TRUSTED_GOVERNANCE_CHANGE scripts/repository.mjs requires repository-owner review and merge-gate bypass',
+      'TRUSTED_GOVERNANCE_CHANGE tests/governance/trusted-governance.test.ts requires repository-owner review and merge-gate bypass',
+    ]);
+  });
+
+  it('rejects weakened invariant inventory', () => {
     expect(
       validateBaselineIntegrity(baseline, {
         ...baseline,
         mandatoryRuleIds: [],
         mandatoryTestSuites: [],
         protectedGovernancePaths: [],
-        publicEntryPolicy: { rootOnlyByDefault: false, transitiveUndeclaredReExport: 'allowed' },
+        trustRootPaths: [],
+        publicEntryPolicy: {
+          rootOnlyByDefault: false,
+          transitiveUndeclaredReExport: 'allowed',
+        },
         basePolicy: { missingBaseAction: 'skip' },
       }),
-    ).toHaveLength(6);
+    ).toHaveLength(14);
     expect(validateFixtureMatrixIntegrity({ ARCH001: ['deep-import'] }, { ARCH001: [] })).toEqual([
       'TRUSTED_FIXTURE_REMOVED ARCH001/deep-import',
     ]);
   });
 
-  it('requires base checkout and forbids executing PR dependencies', () => {
+  it('requires a BASE checkout and never executes PR dependencies', () => {
     expect(validateTrustedWorkflow(trustedWorkflow)).toEqual([]);
     expect(validateTrustedWorkflow(trustedWorkflow.replace('base.sha', 'head.sha'))).toContain(
       'TRUSTED_WORKFLOW_UNTRUSTED_CHECKOUT PR head checkout is forbidden',
@@ -138,140 +145,24 @@ describe('trusted governance checks', () => {
     expect(validateNormalWorkflow(normalWorkflow)).toEqual([]);
   });
 
-  it('binds changed paths to base-approved scope', () => {
+  it('allows root dependency changes but protects the actual verification commands', () => {
     expect(
-      validateTrustedHead({
-        ...trustedHeadFixtureDefaults,
-        changedPaths: ['scripts/check-architecture-fixtures.mjs'],
-      }),
+      validateRootPackageScripts(rootPackage, { ...rootPackage, dependencies: { zod: '4.0.0' } }),
     ).toEqual([]);
     expect(
-      validateTrustedHead({
-        ...trustedHeadFixtureDefaults,
-        changedPaths: ['package.json'],
+      validateRootPackageScripts(rootPackage, {
+        ...rootPackage,
+        scripts: { ...rootPackage.scripts, 'security:scan': 'echo skipped' },
       }),
-    ).toContain('TRUSTED_SCOPE_VIOLATION package.json');
+    ).toEqual(['TRUSTED_ROOT_SCRIPT_CHANGED security:scan requires repository-owner review']);
   });
 
-  it('matches globstars at zero or multiple directory levels without widening stars', () => {
-    const pattern = 'packages/shared/contracts/src/**/*.test.ts';
-    expect(trustedPathMatchesPattern('packages/shared/contracts/src/index.test.ts', pattern)).toBe(
+  it('matches exact, star, and globstar Trust Root patterns', () => {
+    expect(pathMatchesPattern('AGENTS.md', 'AGENTS.md')).toBe(true);
+    expect(pathMatchesPattern('.github/workflows/ci.yml', '.github/workflows/**')).toBe(true);
+    expect(pathMatchesPattern('tests/architecture/foo/bar.test.ts', 'tests/architecture/**')).toBe(
       true,
     );
-    expect(
-      trustedPathMatchesPattern('packages/shared/contracts/src/foo/index.test.ts', pattern),
-    ).toBe(true);
-    expect(
-      trustedPathMatchesPattern('packages/shared/contracts/src/foo/bar/index.test.ts', pattern),
-    ).toBe(true);
-    expect(
-      trustedPathMatchesPattern(
-        'packages/shared/contracts/src/foo/bar.test.ts',
-        'packages/shared/contracts/src/*.test.ts',
-      ),
-    ).toBe(false);
-  });
-
-  it('passes a new WP planning record authorized by GOV-001 in BASE_SHA', () => {
-    const fixture = readFixture('planning-only-wp.json');
-    expect(
-      validateTrustedHead({
-        ...trustedHeadFixtureDefaults,
-        changedPaths: fixture.changedEntries.flatMap((entry) => entry.paths),
-        changedEntries: fixture.changedEntries,
-        baseFiles: fixture.baseFiles,
-        basePlanningBootstrap: fixture.basePlanningBootstrap,
-      }),
-    ).toEqual([]);
-  });
-
-  it('passes a new CCR planning record authorized by GOV-001 in BASE_SHA', () => {
-    const fixture = readFixture('ccr-planning-only.json');
-    expect(
-      validateTrustedHead({
-        ...trustedHeadFixtureDefaults,
-        changedPaths: fixture.changedEntries.flatMap((entry) => entry.paths),
-        changedEntries: fixture.changedEntries,
-        baseFiles: fixture.baseFiles,
-        basePlanningBootstrap: fixture.basePlanningBootstrap,
-      }),
-    ).toEqual([]);
-  });
-
-  it('rejects a CCR planning record combined with business implementation', () => {
-    const fixture = readFixture('ccr-with-business-implementation.json');
-    expect(
-      validateTrustedHead({
-        ...trustedHeadFixtureDefaults,
-        changedPaths: fixture.changedEntries.flatMap((entry) => entry.paths),
-        changedEntries: fixture.changedEntries,
-        baseFiles: fixture.baseFiles,
-        basePlanningBootstrap: fixture.basePlanningBootstrap,
-      }),
-    ).toContain(fixture.expected);
-  });
-
-  it('allows only the named planner policy files in a governance remediation', () => {
-    const policyPaths = [
-      'docs/governance/work-package.template.md',
-      'docs/work-packages/README.md',
-    ];
-    expect(
-      validateTrustedHead({
-        ...trustedHeadFixtureDefaults,
-        changedPaths: policyPaths,
-        changedEntries: policyPaths.map((path) => ({ status: 'M', paths: [path] })),
-        baseFiles: ['docs/roadmap/IMPLEMENTATION.md', ...policyPaths],
-        basePlanningBootstrap: '> STATUS: APPROVED / GOVERNANCE BOOTSTRAP',
-      }),
-    ).toEqual([]);
-    expect(
-      validateTrustedHead({
-        ...trustedHeadFixtureDefaults,
-        changedPaths: ['docs/governance/GOV-002-security-hardening.md'],
-        changedEntries: [{ status: 'A', paths: ['docs/governance/GOV-002-security-hardening.md'] }],
-        baseFiles: ['docs/roadmap/IMPLEMENTATION.md'],
-        basePlanningBootstrap: '> STATUS: APPROVED / GOVERNANCE BOOTSTRAP',
-      }),
-    ).toContain('TRUSTED_SCOPE_VIOLATION docs/governance/GOV-002-security-hardening.md');
-  });
-
-  it('passes a necessary roadmap planning status update authorized by GOV-001', () => {
-    const fixture = readFixture('roadmap-status-update.json');
-    expect(
-      validateTrustedHead({
-        ...trustedHeadFixtureDefaults,
-        changedPaths: fixture.changedEntries.flatMap((entry) => entry.paths),
-        changedEntries: fixture.changedEntries,
-        baseFiles: fixture.baseFiles,
-        basePlanningBootstrap: fixture.basePlanningBootstrap,
-      }),
-    ).toEqual([]);
-  });
-
-  it('rejects a planning record combined with business implementation', () => {
-    const fixture = readFixture('wp-with-business-implementation.json');
-    expect(
-      validateTrustedHead({
-        ...trustedHeadFixtureDefaults,
-        changedPaths: fixture.changedEntries.flatMap((entry) => entry.paths),
-        changedEntries: fixture.changedEntries,
-        baseFiles: fixture.baseFiles,
-        basePlanningBootstrap: fixture.basePlanningBootstrap,
-      }),
-    ).toContain(fixture.expected);
-  });
-
-  it('rejects ordinary unauthorized governance widening', () => {
-    const fixture = readFixture('unauthorized-governance-widening.json');
-    expect(
-      validateTrustedHead({
-        ...trustedHeadFixtureDefaults,
-        changedPaths: fixture.changedEntries.flatMap((entry) => entry.paths),
-        changedEntries: fixture.changedEntries,
-        baseFiles: fixture.baseFiles,
-        basePlanningBootstrap: fixture.basePlanningBootstrap,
-      }),
-    ).toContain(fixture.expected);
+    expect(pathMatchesPattern('packages/foo/package.json', 'tests/**')).toBe(false);
   });
 });

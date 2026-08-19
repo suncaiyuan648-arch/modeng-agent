@@ -56,6 +56,8 @@ export function runFixture(fixture) {
         entries: fixtureEntries(fixture),
         proposals: fixture.proposals ?? [],
         baseDocuments: fixture.baseDocuments,
+        contractChangePaths: fixture.contractChangePaths ?? [],
+        architectureChangePaths: fixture.architectureChangePaths ?? [],
       });
     default:
       throw new Error(`ARCH_FIXTURE_UNKNOWN unsupported fixture kind ${fixture.kind}`);

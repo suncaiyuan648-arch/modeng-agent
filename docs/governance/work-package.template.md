@@ -19,7 +19,7 @@ prerequisite checker.
 - Frozen Contract touched：yes | no
 - CCR required：yes | no
 - ADR required：yes | no
-- Manifest change required：yes | no
+- Owner/dependency direction change required：yes | no
 - Architecture change required：yes | no
 - State-machine change required：yes | no
 
@@ -31,7 +31,7 @@ prerequisite checker.
 
 - 不做无关重构。
 
-## Allowed write paths
+## Expected change areas
 
 - `<path>`
 
@@ -43,7 +43,7 @@ prerequisite checker.
 
 - 跨模块 deep import。
 - 直接访问 Prisma/BullMQ/Provider SDK 或他域表。
-- 未授权修改 Contract/Manifest/Migration。
+- 未经 CCR/ADR 修改 Frozen Contract、Owner、依赖方向或 Migration。
 
 ## Public dependencies
 
