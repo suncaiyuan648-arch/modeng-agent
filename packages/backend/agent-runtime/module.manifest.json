@@ -10,7 +10,14 @@
   "migrationScopes": [],
   "publicExports": ["."],
   "publicContractFiles": ["src/index.ts"],
-  "allowedDependencies": ["shared-contracts", "shared-domain-kernel", "backend-context-memory"],
+  "allowedDependencies": [
+    "shared-contracts",
+    "shared-domain-kernel",
+    "backend-context-memory",
+    "backend-task-engine",
+    "backend-capability-talk",
+    "backend-event-realtime"
+  ],
   "forbiddenImports": ["**/internal/**"],
   "contracts": [],
   "errorCodes": [],

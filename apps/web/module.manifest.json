@@ -10,7 +10,16 @@
   "migrationScopes": [],
   "publicExports": [],
   "publicContractFiles": [],
-  "allowedDependencies": [],
+  "allowedDependencies": [
+    "frontend-agent-ui",
+    "frontend-agent-runtime",
+    "frontend-realtime",
+    "frontend-conversation",
+    "frontend-capability-talk",
+    "frontend-project",
+    "frontend-workspace",
+    "shared-contracts"
+  ],
   "forbiddenImports": ["**/internal/**"],
   "contracts": [],
   "errorCodes": [],

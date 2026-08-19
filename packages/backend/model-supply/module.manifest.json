@@ -12,11 +12,13 @@
   "publicContractFiles": ["src/index.ts"],
   "allowedDependencies": ["shared-contracts", "shared-domain-kernel"],
   "forbiddenImports": ["**/internal/**"],
-  "contracts": [],
-  "errorCodes": [],
+  "contracts": [
+    { "name": "ModelExecutionPort", "owner": "backend-model-supply", "version": "1.0.0" }
+  ],
+  "errorCodes": ["DEPENDENCY_UNAVAILABLE", "TIMEOUT", "CANCELLED", "INTERNAL_ERROR"],
   "featureFlags": [],
   "retentionPolicies": [],
-  "conformanceSuites": [],
+  "conformanceSuites": ["model-execution-port-v1"],
   "fileZones": {
     "frozen": ["module.manifest.json"],
     "controlled": ["src/index.ts", "package.json"],

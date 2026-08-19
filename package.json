@@ -16,7 +16,7 @@
     "format": "prettier --write apps packages scripts tests deploy prisma .github/workflows package.json pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs vitest.config.ts",
     "format:check": "prettier --check apps packages scripts tests deploy prisma .github/workflows package.json pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs vitest.config.ts",
     "lint": "eslint apps packages scripts vitest.config.ts --max-warnings 0",
-    "typecheck": "pnpm -r --if-present typecheck",
+    "typecheck": "pnpm build && pnpm -r --if-present typecheck",
     "test": "vitest run",
     "security:scan": "node scripts/check-secrets.mjs",
     "security:scan:staged": "node scripts/check-secrets.mjs --staged",
@@ -25,7 +25,7 @@
     "architecture:check": "node scripts/check-architecture.mjs",
     "verify:module": "node scripts/verify-module.mjs",
     "verify:changed": "node scripts/verify-changed.mjs",
-    "verify": "pnpm format:check && pnpm security:scan && pnpm lint && pnpm typecheck && pnpm test && pnpm architecture:check && pnpm build"
+    "verify": "pnpm format:check && pnpm security:scan && pnpm lint && pnpm typecheck && pnpm test && pnpm architecture:check"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

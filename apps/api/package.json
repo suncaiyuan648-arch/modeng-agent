@@ -10,6 +10,12 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@modern-agent/backend-agent-runtime": "workspace:*",
+    "@modern-agent/backend-capability-talk": "workspace:*",
+    "@modern-agent/backend-event-realtime": "workspace:*",
+    "@modern-agent/backend-model-supply": "workspace:*",
+    "@modern-agent/backend-task-engine": "workspace:*",
+    "@modern-agent/shared-contracts": "workspace:*",
     "@nestjs/common": "^11.1.29",
     "@nestjs/core": "^11.1.29",
     "@nestjs/platform-express": "^11.1.29",
