@@ -269,6 +269,9 @@ describe('Rules Lite contract and architecture review', () => {
     expect(isFrozenContractPath('packages/backend/task-engine/src/index.ts')).toBe(false);
     expect(isFrozenContractPath('packages/backend/task-engine/src/task-contract.ts')).toBe(true);
     expect(isFrozenContractPath('packages/backend/task-engine/src/execution-port.ts')).toBe(true);
+    expect(isFrozenContractPath('packages/backend/task-engine/src/contracts/task.ts')).toBe(true);
+    expect(isFrozenContractPath('packages/backend/task-engine/src/ports/execution.ts')).toBe(true);
+    expect(isFrozenContractPath('packages/backend/task-engine/src/schemas/task.ts')).toBe(true);
     expect(isFrozenContractPath('packages/backend/task-engine/src/index.test.ts')).toBe(false);
     expect(isFrozenContractPath('packages/backend/task-engine/src/task-contract.test.ts')).toBe(
       false,
@@ -276,6 +279,34 @@ describe('Rules Lite contract and architecture review', () => {
     expect(
       isFrozenContractPath('packages/backend/task-engine/src/internal/provider-schema.ts'),
     ).toBe(false);
+    expect(isFrozenContractPath('packages/backend/task-engine/src/contracts/task.test.ts')).toBe(
+      false,
+    );
+  });
+
+  it('requires a CCR for a nested Contract accepted by the public API guard', () => {
+    const contract = 'packages/backend/task-engine/src/contracts/task.ts';
+    expect(
+      analyzePublicApi({
+        module: {
+          group: 'packages',
+          name: 'task-engine',
+          root: '/repo/packages/backend/task-engine',
+        },
+        manifest: { publicExports: ['.'], publicContractFiles: ['src/contracts/task.ts'] },
+        packageJson: { exports: { '.': './dist/index.js' } },
+        indexSource: "export { TaskPort } from './contracts/task';",
+        sourceFiles: [
+          {
+            path: '/repo/packages/backend/task-engine/src/contracts/task.ts',
+            content: 'export interface TaskPort { run(): Promise<void> }',
+          },
+        ],
+      }),
+    ).toEqual([]);
+    expect(codes(evaluateContractChanges({ files: [contract], baseDocuments: [] }))).toEqual([
+      'ARCH006',
+    ]);
   });
 
   it('allows GREEN/YELLOW paths and requires a BASE CCR only for Frozen Contracts', () => {
@@ -449,6 +480,19 @@ describe('Rules Lite contract and architecture review', () => {
         runGit: contractGit,
       }),
     ).toEqual({ architectureChangePaths: [], contractChangePaths: [file] });
+
+    const schemaVersionGit = () => ({
+      status: 0,
+      stdout: JSON.stringify({ ...current, schemaVersion: '2.0.0' }),
+      stderr: '',
+    });
+    expect(
+      detectManifestDecisionPaths({
+        entries: [{ paths: [file] }],
+        baseRef: 'base',
+        runGit: schemaVersionGit,
+      }),
+    ).toEqual({ architectureChangePaths: [file], contractChangePaths: [] });
   });
 });
 

@@ -41,6 +41,7 @@ export async function readBaseAuthorizationDocuments(baseRef, runGit = defaultGi
 }
 
 const ARCHITECTURE_FIELDS = Object.freeze([
+  'schemaVersion',
   'name',
   'kind',
   'ownsState',
