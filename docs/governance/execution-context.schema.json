@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-platform.local/schemas/execution-context.schema.json",
+  "title": "Active Work Package Execution Context V2",
+  "description": "The single machine-readable Work Package selected for an implementation run.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "activeWorkPackage", "basePolicy"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "pattern": "(^|/)execution-context\\.schema\\.json$"
+    },
+    "schemaVersion": {
+      "const": "2"
+    },
+    "activeWorkPackage": {
+      "type": "string",
+      "pattern": "^(?:WP|GOV)-[0-9]{3,}$"
+    },
+    "authorizationPath": {
+      "type": "string",
+      "pattern": "^docs/(?:work-packages|governance)/(?:WP|GOV)-[0-9]{3,}\\.auth\\.json$"
+    },
+    "basePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environmentVariable", "missingBaseAction"],
+      "properties": {
+        "environmentVariable": {
+          "const": "BASE_SHA"
+        },
+        "missingBaseAction": {
+          "const": "fail-closed"
+        }
+      }
+    }
+  }
+}

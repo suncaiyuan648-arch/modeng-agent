@@ -1,0 +1,10 @@
+{
+  "$schema": "./execution-context.schema.json",
+  "schemaVersion": "2",
+  "activeWorkPackage": "GOV-002",
+  "authorizationPath": "docs/work-packages/GOV-002.auth.json",
+  "basePolicy": {
+    "environmentVariable": "BASE_SHA",
+    "missingBaseAction": "fail-closed"
+  }
+}

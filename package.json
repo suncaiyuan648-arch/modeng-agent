@@ -23,6 +23,7 @@
     "security:generate-secret": "node scripts/generate-secret.mjs",
     "architecture:fixtures": "node scripts/check-architecture-fixtures.mjs",
     "architecture:check": "node scripts/check-architecture.mjs",
+    "wp:doctor": "node scripts/wp-doctor.mjs",
     "verify:module": "node scripts/verify-module.mjs",
     "verify:changed": "node scripts/verify-changed.mjs",
     "verify": "pnpm format:check && pnpm security:scan && pnpm lint && pnpm typecheck && pnpm test && pnpm architecture:check && pnpm build"
