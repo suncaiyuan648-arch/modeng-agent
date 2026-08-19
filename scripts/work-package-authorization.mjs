@@ -46,7 +46,7 @@ export const AUTHORIZATION_CODES = Object.freeze({
   REQUIRED_CCR_MISSING: 'WP_REQUIRED_CCR_MISSING',
   REQUIRED_ADR_MISSING: 'WP_REQUIRED_ADR_MISSING',
   REQUIRED_PREREQUISITE_MISSING: 'WP_REQUIRED_GOVERNANCE_PREREQUISITE_MISSING',
-  BASE_MISSING: 'WP_BASE_SHA_MISSING',
+  BASE_MISSING: 'TRUSTED_BASE_REQUIRED',
 });
 
 const WORK_PACKAGE_ID_PATTERN = /^(?:WP|GOV)-\d{3,}$/u;
@@ -360,13 +360,12 @@ export function computeReadiness({
   requestedWorkPackage,
   loaded,
   requiredApprovals = collectRequiredApprovals({ loaded }),
-  requireTrustedBase = false,
 } = {}) {
   const blockedReasons = [];
   const authorization = loaded?.authorization;
   const activeWorkPackage = loaded?.activeWorkPackage;
 
-  if (requireTrustedBase && loaded?.source !== 'BASE_SHA') {
+  if (loaded?.source !== 'BASE_SHA') {
     blockedReasons.push(
       blockedReason(
         AUTHORIZATION_CODES.BASE_MISSING,
@@ -465,6 +464,16 @@ function scopeViolation(code, change, message) {
 
 export function evaluateWpScope({ context, authorization, changes = [] } = {}) {
   const violations = [];
+  if (authorization?.status !== 'APPROVED') {
+    violations.push(
+      scopeViolation(
+        AUTHORIZATION_CODES.AUTHORIZATION_NOT_APPROVED,
+        { path: '<authorization>' },
+        `authorization status ${authorization?.status ?? 'UNKNOWN'} is not APPROVED`,
+      ),
+    );
+    return violations;
+  }
   if (context?.activeWorkPackage !== authorization?.id) {
     violations.push(
       scopeViolation(
@@ -584,6 +593,7 @@ export function formatReadiness(readiness) {
     `  ID: ${authorization?.id ?? 'MISSING'}`,
     `  Status: ${authorization?.status ?? 'MISSING'}`,
     `  Source: ${readiness.source ?? 'unknown'}${readiness.source === 'working-tree' ? ' (advisory)' : ''}`,
+    `Mode: ${readiness.source === 'BASE_SHA' ? 'TRUSTED BASE' : 'ADVISORY / UNTRUSTED'}`,
     `Active WP: ${readiness.activeWorkPackage ?? 'MISSING'}`,
     `Target Modules: ${readiness.targetModules.join(', ') || '(none)'}`,
     `YELLOW Capabilities: ${readiness.yellowCapabilities.join(', ') || '(none)'}`,
@@ -606,19 +616,17 @@ export function formatReadiness(readiness) {
 function parseCliArguments(argv) {
   const requestedWorkPackage = argv[0];
   const baseFlagIndex = argv.indexOf('--base-sha');
-  const baseRef =
-    baseFlagIndex >= 0 ? argv[baseFlagIndex + 1] : process.env.BASE_SHA?.trim() || undefined;
+  const baseRef = baseFlagIndex >= 0 ? argv[baseFlagIndex + 1] : process.env.BASE_SHA?.trim();
   return {
     requestedWorkPackage,
     baseRef,
-    requireTrustedBase: argv.includes('--require-base') || process.env.CI === 'true',
   };
 }
 
 export function runCli(argv = process.argv.slice(2)) {
   const options = parseCliArguments(argv);
   if (options.requestedWorkPackage === undefined) {
-    console.error('usage: pnpm wp:doctor <WP-ID> [--base-sha <trusted-base>] [--require-base]');
+    console.error('usage: pnpm wp:doctor <WP-ID> [--base-sha <trusted-base>]');
     return 2;
   }
   try {
@@ -634,7 +642,6 @@ export function runCli(argv = process.argv.slice(2)) {
 export function runWorkPackageDoctor({
   requestedWorkPackage,
   baseRef,
-  requireTrustedBase = false,
   root = repositoryRoot,
   runGit = defaultGit,
 } = {}) {
@@ -650,7 +657,6 @@ export function runWorkPackageDoctor({
     requestedWorkPackage,
     loaded,
     requiredApprovals,
-    requireTrustedBase,
   });
 }
 

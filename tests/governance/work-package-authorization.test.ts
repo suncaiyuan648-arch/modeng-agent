@@ -9,8 +9,10 @@ import {
   AUTHORIZATION_CODES,
   computeReadiness,
   evaluateWpScope,
+  formatReadiness,
   loadActiveAuthorization,
   parseAuthorizationDocument,
+  runWorkPackageDoctor,
   validateAuthorizationDocument,
   validateExecutionContextDocument,
 } from '../../scripts/work-package-authorization.mjs';
@@ -123,6 +125,25 @@ describe('Rules V2 authorization core', () => {
     ]);
   });
 
+  it('denies every non-APPROVED authorization status before scope evaluation', () => {
+    for (const status of ['IMPLEMENTATION_BLOCKED', 'COMPLETED', 'FROZEN', 'UNKNOWN']) {
+      const violations = evaluateWpScope({
+        context: { activeWorkPackage: 'WP-100' },
+        authorization: authorization({ id: 'WP-100', status }),
+        changes: [
+          {
+            path: 'src/internal/chat.ts',
+            module: 'frontend-agent-ui',
+            zone: 'implementation',
+          },
+        ],
+      });
+      expect(violations.map((violation: { code: string }) => violation.code)).toEqual([
+        AUTHORIZATION_CODES.AUTHORIZATION_NOT_APPROVED,
+      ]);
+    }
+  });
+
   it('allows GREEN implementation and authorized YELLOW capability, but blocks RED', () => {
     const current = authorization();
     const context = { activeWorkPackage: current.id };
@@ -183,7 +204,6 @@ describe('Rules V2 authorization core', () => {
         adr: [{ id: 'ADR-0001', exists: true, approved: false }],
         prerequisites: [],
       },
-      requireTrustedBase: true,
     });
     expect(notReady.ready).toBe(false);
     expect(notReady.blockedReasons.map((reason: { code: string }) => reason.code)).toEqual([
@@ -199,23 +219,18 @@ describe('Rules V2 authorization core', () => {
         adr: [{ id: 'ADR-0001', exists: true, approved: true }],
         prerequisites: [],
       },
-      requireTrustedBase: true,
     });
     expect(ready.ready).toBe(true);
 
-    const workingTreeOnly = computeReadiness({
-      requestedWorkPackage: current.id,
-      loaded: { ...loaded, source: 'working-tree', baseRef: undefined },
-      requiredApprovals: {
-        ccr: [{ id: 'CCR-0002', exists: true, approved: true }],
-        adr: [{ id: 'ADR-0001', exists: true, approved: true }],
-        prerequisites: [],
-      },
-      requireTrustedBase: true,
+    const workingTreeOnly = runWorkPackageDoctor({
+      requestedWorkPackage: 'GOV-002',
     });
     expect(workingTreeOnly.ready).toBe(false);
     expect(workingTreeOnly.blockedReasons.map((reason: { code: string }) => reason.code)).toEqual([
       AUTHORIZATION_CODES.BASE_MISSING,
     ]);
+    const output = formatReadiness(workingTreeOnly);
+    expect(output).toContain('Mode: ADVISORY / UNTRUSTED');
+    expect(output).toContain('NOT READY');
   });
 });
