@@ -11,7 +11,7 @@ scope. It does not authorize implementation by itself.
 
 - Current governance work: **GOV-001 Execution Planning Bootstrap**
 - Current product Work Package: **None**
-- Next product Work Package: **WP-004 Fake TALK Vertical Slice**
+- Next product Work Package: **WP-005 Real TALK Provider + Modeng Model Supply Foundation**
 - Agent business implementation in progress: **None**
 - Frozen architecture source: [`01-跨模块契约与架构决策.md`](../architecture/01-跨模块契约与架构决策.md)
 
@@ -23,6 +23,7 @@ scope. It does not authorize implementation by itself.
 | WP-001       | Secret and API key protection baseline             | COMPLETED / FROZEN | `84df440` / `WP-001`        |
 | WP-002       | Architecture Guard and trusted governance baseline | COMPLETED / FROZEN | `a60dd92` / PR #1 and PR #2 |
 | WP-003       | Contract Kernel for the first TALK vertical slice  | COMPLETED / FROZEN | `5d1d49a` / PR #13          |
+| WP-004       | Fake TALK end-to-end vertical slice                | COMPLETED / FROZEN | `6302e7f` / PR #24          |
 
 The frozen WP-003 scope and acceptance criteria remain defined by its approved
 planning record and implementation evidence. The original WP-003 planning record
@@ -30,16 +31,15 @@ is not reopened by later Work Packages.
 
 ## Queued work
 
-| Order | Work Package | Intent                                     | Entry gate                                               |
-| ----- | ------------ | ------------------------------------------ | -------------------------------------------------------- |
-| 1     | WP-004       | Prove the TALK path with a Fake Model      | Approved WP-004 planning record; WP-003 completed/frozen |
-| 2     | Later        | Real providers and additional capabilities | Separate approved Work Packages                          |
+| Order | Work Package | Intent                                       | Entry gate                                               |
+| ----- | ------------ | -------------------------------------------- | -------------------------------------------------------- |
+| 1     | WP-005       | Real TALK Provider + Model Supply foundation | Approved WP-005 planning record; WP-004 completed/frozen |
+| 2     | Later        | Additional providers and capabilities        | Separate approved Work Packages                          |
 
 ## Deferred scope
 
-Until the Contract Kernel and Fake Model vertical slice are stable, do not start:
+Until WP-005 has an approved planning record, do not start:
 
-- real model-provider integrations;
 - IMAGE, VIDEO, AUDIO, or SUMMARY business implementations;
 - production MQ/Worker scaling changes;
 - billing, campaign delivery, or promotion-center workflows;
