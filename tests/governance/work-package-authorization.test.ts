@@ -67,6 +67,7 @@ describe('Rules V2 authorization core', () => {
       authorizationPath: 'docs/work-packages/WP-101.auth.json',
       basePolicy: { environmentVariable: 'BASE_SHA', missingBaseAction: 'fail-closed' },
     };
+    expect(validateExecutionContextDocument(context).valid).toBe(true);
     const activeAuthorization = authorization({ id: 'WP-101' });
     const files = new Map([
       ['docs/governance/execution-context.json', JSON.stringify(context)],
@@ -95,6 +96,65 @@ describe('Rules V2 authorization core', () => {
       'docs/work-packages/WP-101.auth.json',
     ]);
     expect(shown.some((file) => file.includes('WP-100'))).toBe(false);
+  });
+
+  it('rejects an authorization path outside the Schema and loader canonical path', () => {
+    const context = {
+      $schema: './execution-context.schema.json',
+      schemaVersion: '2',
+      activeWorkPackage: 'WP-101',
+      authorizationPath: 'docs/governance/WP-101.auth.json',
+      basePolicy: { environmentVariable: 'BASE_SHA', missingBaseAction: 'fail-closed' },
+    };
+    expect(validateExecutionContextDocument(context).valid).toBe(false);
+
+    const runGit = (args: string[]) => {
+      if (args[0] === 'rev-parse') {
+        return { status: 0, stdout: 'base\n', stderr: '' };
+      }
+      if (args[0] === 'show' && args[1] === 'base:docs/governance/execution-context.json') {
+        return { status: 0, stdout: JSON.stringify(context), stderr: '' };
+      }
+      return { status: 1, stdout: '', stderr: '' };
+    };
+
+    expect(() =>
+      loadActiveAuthorization({
+        requestedWorkPackage: 'WP-101',
+        baseRef: 'base',
+        runGit,
+      }),
+    ).toThrow(AUTHORIZATION_CODES.ACTIVE_CONTEXT_INVALID);
+  });
+
+  it('fails closed when loaded authorization ID differs from Active WP', () => {
+    const context = {
+      $schema: './execution-context.schema.json',
+      schemaVersion: '2',
+      activeWorkPackage: 'WP-101',
+      authorizationPath: 'docs/work-packages/WP-101.auth.json',
+      basePolicy: { environmentVariable: 'BASE_SHA', missingBaseAction: 'fail-closed' },
+    };
+    const files = new Map([
+      ['docs/governance/execution-context.json', JSON.stringify(context)],
+      ['docs/work-packages/WP-101.auth.json', JSON.stringify(authorization({ id: 'WP-100' }))],
+    ]);
+    const runGit = (args: string[]) => {
+      if (args[0] === 'rev-parse') {
+        return { status: 0, stdout: 'base\n', stderr: '' };
+      }
+      const requested = args[1]?.replace('base:', '') ?? '';
+      const content = files.get(requested);
+      return { status: content === undefined ? 1 : 0, stdout: content ?? '', stderr: '' };
+    };
+
+    expect(() =>
+      loadActiveAuthorization({
+        requestedWorkPackage: 'WP-101',
+        baseRef: 'base',
+        runGit,
+      }),
+    ).toThrow(AUTHORIZATION_CODES.ACTIVE_WORK_PACKAGE_MISMATCH);
   });
 
   it('computes READY through runWorkPackageDoctor from trusted BASE prerequisites', () => {

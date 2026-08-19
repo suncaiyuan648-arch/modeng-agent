@@ -20,7 +20,7 @@
     },
     "authorizationPath": {
       "type": "string",
-      "pattern": "^docs/(?:work-packages|governance)/(?:WP|GOV)-[0-9]{3,}\\.auth\\.json$"
+      "pattern": "^docs/work-packages/(?:WP|GOV)-[0-9]{3,}\\.auth\\.json$"
     },
     "basePolicy": {
       "type": "object",

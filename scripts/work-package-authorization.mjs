@@ -282,6 +282,13 @@ export function loadActiveAuthorization({
     parser: parseAuthorizationDocument,
   });
 
+  if (authorization !== undefined && authorization.id !== activeWorkPackage) {
+    throw new WorkPackageAuthorizationError(
+      AUTHORIZATION_CODES.ACTIVE_WORK_PACKAGE_MISMATCH,
+      `authorization ID ${authorization.id} does not match Active WP ${activeWorkPackage}`,
+    );
+  }
+
   return Object.freeze({
     requestedWorkPackage,
     activeWorkPackage,
