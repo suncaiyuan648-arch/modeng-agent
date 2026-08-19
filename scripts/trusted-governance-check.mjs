@@ -16,18 +16,6 @@ const PLANNER_POLICY_PATHS = new Set([
   'docs/governance/work-package.template.md',
   'docs/work-packages/README.md',
 ]);
-const GOV002_AUTHORIZATION_PATH = 'docs/work-packages/GOV-002.auth.json';
-const GOV002_EXECUTION_CONTEXT_PATH = 'docs/governance/execution-context.json';
-const GOV002_CORE_PATHS = new Set([
-  'docs/governance/README.md',
-  'docs/governance/work-package-auth.schema.json',
-  'docs/governance/execution-context.schema.json',
-  'scripts/work-package-authorization.mjs',
-  'scripts/wp-doctor.mjs',
-  'tests/governance/fixtures/active-wp-does-not-inherit-history.json',
-  'tests/governance/work-package-authorization.test.ts',
-  'package.json',
-]);
 const REQUIRED_SUITE_PATHS = Object.freeze([
   'tests/architecture/architecture-guard.test.ts',
   MATRIX_PATH,
@@ -301,25 +289,6 @@ function isPlanningOnlyEntry(entry, baseFileSet) {
   );
 }
 
-function isApprovedGov002Authorization({ baseFiles, baseExecutionContext, baseAuthorization }) {
-  if (!baseFiles.includes(GOV002_AUTHORIZATION_PATH)) {
-    return false;
-  }
-  try {
-    const context = JSON.parse(baseExecutionContext ?? '');
-    const authorization = JSON.parse(baseAuthorization ?? '');
-    return (
-      context.schemaVersion === '2' &&
-      context.activeWorkPackage === 'GOV-002' &&
-      authorization.schemaVersion === '2' &&
-      authorization.id === 'GOV-002' &&
-      authorization.status === 'APPROVED'
-    );
-  } catch {
-    return false;
-  }
-}
-
 export function validateTrustedHead({
   baseBaseline,
   headBaseline,
@@ -334,8 +303,6 @@ export function validateTrustedHead({
   changedEntries,
   baseFiles = [],
   basePlanningBootstrap,
-  baseExecutionContext,
-  baseAuthorization,
   allowedPaths,
 }) {
   const failures = validateBaselineIntegrity(baseBaseline, headBaseline);
@@ -371,11 +338,6 @@ export function validateTrustedHead({
   }
 
   const baseFileSet = new Set(baseFiles);
-  const gov002AuthorizationAuthorized = isApprovedGov002Authorization({
-    baseFiles,
-    baseExecutionContext,
-    baseAuthorization,
-  });
   const entries =
     changedEntries ??
     changedPaths.map((path) => ({
@@ -409,12 +371,7 @@ export function validateTrustedHead({
       if (
         !planningChangeDetected &&
         !allowedPaths.some((pattern) => pathMatchesPattern(changedPath, pattern)) &&
-        !(
-          entry.status === 'M' &&
-          entry.paths.length === 1 &&
-          PLANNER_POLICY_PATHS.has(changedPath)
-        ) &&
-        !(gov002AuthorizationAuthorized && GOV002_CORE_PATHS.has(changedPath))
+        !(entry.status === 'M' && entry.paths.length === 1 && PLANNER_POLICY_PATHS.has(changedPath))
       ) {
         failures.push(`TRUSTED_SCOPE_VIOLATION ${changedPath}`);
       }
@@ -475,8 +432,6 @@ export function runTrustedGovernanceCheck({ env = process.env, runGit = defaultG
     changedEntries,
     baseFiles,
     basePlanningBootstrap: readTreeFile(baseRef, PLANNING_BOOTSTRAP_PATH, runGit),
-    baseExecutionContext: readTreeFile(baseRef, GOV002_EXECUTION_CONTEXT_PATH, runGit),
-    baseAuthorization: readTreeFile(baseRef, GOV002_AUTHORIZATION_PATH, runGit),
     allowedPaths,
   });
   if (failures.length > 0) throw new Error(failures.join('\n'));

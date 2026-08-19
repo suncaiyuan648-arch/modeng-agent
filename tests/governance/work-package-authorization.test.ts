@@ -97,6 +97,43 @@ describe('Rules V2 authorization core', () => {
     expect(shown.some((file) => file.includes('WP-100'))).toBe(false);
   });
 
+  it('computes READY through runWorkPackageDoctor from trusted BASE prerequisites', () => {
+    const contextPath = 'docs/governance/execution-context.json';
+    const authorizationPath = 'docs/work-packages/GOV-002.auth.json';
+    const prerequisitePath = 'docs/governance/GOV-001-execution-planning-bootstrap.md';
+    const files = new Map([
+      [contextPath, readFileSync(resolve(repositoryRoot, contextPath), 'utf8')],
+      [authorizationPath, readFileSync(resolve(repositoryRoot, authorizationPath), 'utf8')],
+      [prerequisitePath, readFileSync(resolve(repositoryRoot, prerequisitePath), 'utf8')],
+    ]);
+    const calls: string[][] = [];
+    const runGit = (args: string[]) => {
+      calls.push(args);
+      if (args[0] === 'rev-parse') {
+        return { status: 0, stdout: 'base\n', stderr: '' };
+      }
+      if (args[0] === 'show') {
+        const requested = args[1]?.replace('base:', '') ?? '';
+        const content = files.get(requested);
+        return { status: content === undefined ? 1 : 0, stdout: content ?? '', stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    };
+
+    const readiness = runWorkPackageDoctor({
+      requestedWorkPackage: 'GOV-002',
+      baseRef: 'base',
+      runGit,
+    });
+
+    expect(readiness.ready).toBe(true);
+    expect(readiness.source).toBe('BASE_SHA');
+    expect(readiness.blockedReasons).toEqual([]);
+    expect(calls.some((args) => args[0] === 'show' && args[1] === `base:${prerequisitePath}`)).toBe(
+      true,
+    );
+  });
+
   it('does not inherit a historical WP-100 path when Active WP is WP-101', () => {
     const fixture = readJson(
       'tests/governance/fixtures/active-wp-does-not-inherit-history.json',

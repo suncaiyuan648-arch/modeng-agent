@@ -73,17 +73,6 @@ const trustedHeadFixtureDefaults = {
   allowedPaths: ['scripts/**', 'tests/**'],
 };
 
-const gov002BaseFiles = ['docs/roadmap/IMPLEMENTATION.md', 'docs/work-packages/GOV-002.auth.json'];
-const gov002ExecutionContext = JSON.stringify({
-  schemaVersion: '2',
-  activeWorkPackage: 'GOV-002',
-});
-const gov002Authorization = JSON.stringify({
-  schemaVersion: '2',
-  id: 'GOV-002',
-  status: 'APPROVED',
-});
-
 describe('trusted governance checks', () => {
   it('accepts only the two approved Work Package statuses', () => {
     const allowedPath = 'packages/shared/contracts/src/index.ts';
@@ -162,31 +151,6 @@ describe('trusted governance checks', () => {
         changedPaths: ['package.json'],
       }),
     ).toContain('TRUSTED_SCOPE_VIOLATION package.json');
-  });
-
-  it('recognizes only the V2 governance core after approved GOV-002 is in BASE', () => {
-    const corePath = 'scripts/work-package-authorization.mjs';
-    expect(
-      validateTrustedHead({
-        ...trustedHeadFixtureDefaults,
-        changedPaths: [corePath],
-        changedEntries: [{ status: 'M', paths: [corePath] }],
-        baseFiles: gov002BaseFiles,
-        baseExecutionContext: gov002ExecutionContext,
-        baseAuthorization: gov002Authorization,
-      }),
-    ).toEqual([]);
-
-    expect(
-      validateTrustedHead({
-        ...trustedHeadFixtureDefaults,
-        changedPaths: ['docs/governance/unrelated-policy.md'],
-        changedEntries: [{ status: 'M', paths: ['docs/governance/unrelated-policy.md'] }],
-        baseFiles: gov002BaseFiles,
-        baseExecutionContext: gov002ExecutionContext,
-        baseAuthorization: gov002Authorization,
-      }),
-    ).toContain('TRUSTED_SCOPE_VIOLATION docs/governance/unrelated-policy.md');
   });
 
   it('matches globstars at zero or multiple directory levels without widening stars', () => {
