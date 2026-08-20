@@ -1,8 +1,15 @@
 # WP-006：Durable TALK Facts — PostgreSQL Persistence + Event Replay
 
-> **Planning status：`PLANNING DRAFT`**
+> **Planning status：`APPROVED PLANNING / IMPLEMENTATION READY`**
 >
-> **Implementation gate：`APPROVED PLANNING + MERGED ADR/CCR REQUIRED`**
+> **Implementation gate：`CLOSED AFTER THIS STATUS RECORD MERGES`**
+> `main@6150862` 已包含已审查的 Planning Record、accepted ADR-0003 与
+> approved CCR-0004。Implementation branch 必须从包含本状态切换的最新
+> `main` 创建。
+>
+> 本次状态切换只关闭实施入口，不修改本 Planning Record 的范围、验收标准、
+> Owner、Contract、Migration 或架构决策。
+>
 > 本文件是实施交接说明，不单独授权修改 Migration、owned-table、
 > dependency direction 或 versioned Port。实施分支必须从已合并本记录以及
 > WP-006 专用 ADR/CCR 的最新 `main` 创建。
@@ -24,6 +31,8 @@
 - State-machine change：`forbidden`；复用现有 `accepted | running | completed | failed | cancelled`
 - Feature flag：`none planned`
 - Retention change：`none planned`
+- Approval evidence：Planning PR #28；ADR-0003/CCR-0004 governance PR #29；
+  独立 reviewer PASS；`main@6150862`
 
 ### 1.1 Gate evidence
 
