@@ -138,7 +138,7 @@ export function App() {
             </span>
             <div>
               <div className="agent-project-row__name">TALK Demo</div>
-              <div className="agent-project-row__detail">Local composition</div>
+              <div className="agent-project-row__detail">Modeng AI</div>
             </div>
           </div>
         </div>

@@ -8,6 +8,7 @@ import {
   SCHEMA_VERSION,
 } from '@modern-agent/shared-contracts';
 import type { OperationId, PlatformError, ProjectId } from '@modern-agent/shared-contracts';
+import { createInternalModelSupply } from './internal/real-model-supply.js';
 
 export const MODEL_EXECUTION_PORT_VERSION = 'ModelExecutionPort@1' as const;
 
@@ -98,6 +99,30 @@ export interface ModelExecutionPortV1 {
     request: ModelExecutionRequestV1,
     options?: { readonly signal?: AbortSignal },
   ): Promise<ModelExecutionHandleV1>;
+}
+
+export interface ModelSupplyComposition {
+  readonly resolveTalkExecutionPlan: () => ModelExecutionPlanRefV1;
+  readonly executionPort: ModelExecutionPortV1;
+}
+
+export function createModelSupplyComposition(): ModelSupplyComposition {
+  try {
+    const composition = createInternalModelSupply({
+      ...(process.env['DEEPSEEK_API_KEY'] === undefined
+        ? {}
+        : { apiKey: process.env['DEEPSEEK_API_KEY'] }),
+      ...(process.env['MODENG_TALK_DEFAULT_RELEASE'] === undefined
+        ? {}
+        : { defaultReleaseId: process.env['MODENG_TALK_DEFAULT_RELEASE'] }),
+    });
+    return {
+      resolveTalkExecutionPlan: composition.resolveTalkExecutionPlan,
+      executionPort: composition.executionPort,
+    };
+  } catch (error) {
+    throw toModelExecutionError(error);
+  }
 }
 
 export type FakeModelFailureMode = 'never' | 'fail-once' | 'always';

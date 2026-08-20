@@ -13,7 +13,9 @@ describe('frontend-agent-ui rendered states', () => {
     const markup = render(createElement(MessageList, { messages: [] }));
     expect(markup).toContain('Start with a clear thought.');
     expect(markup).toContain('摩灯 Agent，面向真实任务的工作平台');
-    expect(render(createElement(EmptyState))).toContain('local Fake model');
+    const emptyState = render(createElement(EmptyState));
+    expect(emptyState).toContain('Modeng AI');
+    expect(emptyState).not.toMatch(/fake|local composition/i);
   });
 
   it('renders user, streaming, completed, failed, and retry states', () => {
