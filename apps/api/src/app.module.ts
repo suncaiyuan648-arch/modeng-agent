@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { createModelSupplyComposition } from '@modern-agent/backend-model-supply';
 
 import { HealthController } from './health.controller.js';
 import { TalkController } from './talk.controller.js';
@@ -9,11 +10,7 @@ import { createTalkComposition, TALK_COMPOSITION_TOKEN } from './talk.compositio
   providers: [
     {
       provide: TALK_COMPOSITION_TOKEN,
-      useFactory: () =>
-        createTalkComposition({
-          failureMode:
-            process.env['FAKE_TALK_FAILURE_MODE'] === 'fail-once' ? 'fail-once' : 'never',
-        }),
+      useFactory: () => createTalkComposition(createModelSupplyComposition()),
     },
     {
       provide: TalkController,

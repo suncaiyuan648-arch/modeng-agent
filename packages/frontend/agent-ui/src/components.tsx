@@ -27,7 +27,7 @@ export function EmptyState(): ReactNode {
     <div className="agent-empty-state" data-testid="empty-state">
       <span className="agent-empty-state__eyebrow">TALK</span>
       <h2>Start with a clear thought.</h2>
-      <p>Ask anything about your project. The local Fake model will answer in a streamed reply.</p>
+      <p>Ask anything about your project. Modeng AI will answer in a streamed reply.</p>
     </div>
   );
 }

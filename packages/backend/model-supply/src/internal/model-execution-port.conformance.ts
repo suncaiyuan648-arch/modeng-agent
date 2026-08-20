@@ -5,6 +5,7 @@ import {
   MAX_TALK_OUTPUT_DELTA_LENGTH,
 } from '@modern-agent/shared-contracts';
 import type { ModelExecutionPortV1 } from '../index.js';
+import type { ModelExecutionPlanRefV1 } from '../index.js';
 import { ModelExecutionRequestV1Schema } from '../index.js';
 
 export type ModelExecutionConformanceOptions = {
@@ -13,23 +14,30 @@ export type ModelExecutionConformanceOptions = {
   readonly chunkDelayMs?: number;
 };
 
+export interface ModelExecutionPortHarness {
+  readonly executionPort: ModelExecutionPortV1;
+  readonly resolvePlan: () => ModelExecutionPlanRefV1;
+}
+
 export type ModelExecutionPortFactory = (
   options?: ModelExecutionConformanceOptions,
-) => ModelExecutionPortV1;
+) => ModelExecutionPortHarness;
 
-const request = ModelExecutionRequestV1Schema.parse({
-  schemaVersion: 1,
-  plan: { schemaVersion: 1, planId: 'opaque-plan-v1' },
-  input: { text: 'ordinary business text' },
-  context: {
-    operationId: 'operation_model_conformance',
-    projectId: 'project_model_conformance',
-    capability: 'talk',
-  },
-});
+function request(harness: ModelExecutionPortHarness) {
+  return ModelExecutionRequestV1Schema.parse({
+    schemaVersion: 1,
+    plan: harness.resolvePlan(),
+    input: { text: 'ordinary business text' },
+    context: {
+      operationId: 'operation_model_conformance',
+      projectId: 'project_model_conformance',
+      capability: 'talk',
+    },
+  });
+}
 
-async function readStream(port: ModelExecutionPortV1, input = request): Promise<string> {
-  const handle = await port.execute(input);
+async function readStream(harness: ModelExecutionPortHarness): Promise<string> {
+  const handle = await harness.executionPort.execute(request(harness));
   let output = '';
   let previousOrdinal = 0;
   for await (const delta of handle.stream) {
@@ -46,15 +54,15 @@ export function describeModelExecutionPortConformance(factory: ModelExecutionPor
     it('rejects invalid, oversized, and unknown request fields with a safe error', async () => {
       const port = factory({ chunkDelayMs: 0 });
       await expect(
-        port.execute({
-          ...request,
+        port.executionPort.execute({
+          ...request(port),
           input: { text: 'x'.repeat(MAX_TALK_INPUT_LENGTH + 1) },
         } as never),
       ).rejects.toMatchObject({
         platformError: { code: 'INVALID_INPUT', retryable: false },
       });
       await expect(
-        port.execute({ ...request, provider: 'raw-provider-data' } as never),
+        port.executionPort.execute({ ...request(port), provider: 'raw-provider-data' } as never),
       ).rejects.toMatchObject({
         platformError: { code: 'INVALID_INPUT', retryable: false },
       });
@@ -65,7 +73,7 @@ export function describeModelExecutionPortConformance(factory: ModelExecutionPor
         chunkDelayMs: 0,
         responseChunks: ['first', ' second'],
       });
-      const handle = await port.execute(request);
+      const handle = await port.executionPort.execute(request(port));
       const deltas = [];
       for await (const delta of handle.stream) deltas.push(delta);
       expect(deltas).toEqual([
@@ -83,7 +91,7 @@ export function describeModelExecutionPortConformance(factory: ModelExecutionPor
         responseChunks: ['recovered'],
         chunkDelayMs: 0,
       });
-      await expect(failOnce.execute(request)).rejects.toMatchObject({
+      await expect(failOnce.executionPort.execute(request(failOnce))).rejects.toMatchObject({
         platformError: { code: 'DEPENDENCY_UNAVAILABLE', retryable: true },
       });
       await expect(readStream(failOnce)).resolves.toBe('recovered');
@@ -92,7 +100,9 @@ export function describeModelExecutionPortConformance(factory: ModelExecutionPor
     it('maps lifecycle abort to a safe internal error without user cancellation semantics', async () => {
       const controller = new AbortController();
       const port = factory({ chunkDelayMs: 20 });
-      const handle = await port.execute(request, { signal: controller.signal });
+      const handle = await port.executionPort.execute(request(port), {
+        signal: controller.signal,
+      });
       controller.abort();
       await expect(handle.stream[Symbol.asyncIterator]().next()).rejects.toMatchObject({
         platformError: { code: 'CANCELLED', retryable: true },

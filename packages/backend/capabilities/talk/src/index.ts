@@ -1,6 +1,7 @@
 import { toModelExecutionError } from '@modern-agent/backend-model-supply';
 import type {
   ModelExecutionHandleV1,
+  ModelExecutionPlanRefV1,
   ModelExecutionPortV1,
 } from '@modern-agent/backend-model-supply';
 import type { OperationId, PlatformError, ProjectId } from '@modern-agent/shared-contracts';
@@ -14,6 +15,11 @@ export interface TalkCapabilityRequest {
 
 export interface TalkCapability {
   execute(request: TalkCapabilityRequest): Promise<ModelExecutionHandleV1>;
+}
+
+export interface TalkCapabilityComposition {
+  readonly resolvePlan: () => ModelExecutionPlanRefV1;
+  readonly modelExecution: ModelExecutionPortV1;
 }
 
 export class TalkCapabilityError extends Error {
@@ -36,13 +42,14 @@ export function toTalkCapabilityError(error: unknown): TalkCapabilityError {
   return new TalkCapabilityError(modelError.platformError);
 }
 
-export function createTalkCapability(modelExecution: ModelExecutionPortV1): TalkCapability {
+export function createTalkCapability(composition: TalkCapabilityComposition): TalkCapability {
   return {
     async execute(request) {
       try {
+        const plan = composition.resolvePlan();
         const executionRequest = {
           schemaVersion: 1 as const,
-          plan: { schemaVersion: 1 as const, planId: 'fake-talk-v1' },
+          plan,
           input: { text: request.text },
           context: {
             operationId: request.operationId,
@@ -51,7 +58,7 @@ export function createTalkCapability(modelExecution: ModelExecutionPortV1): Talk
           },
         };
         const options = request.signal === undefined ? undefined : { signal: request.signal };
-        return await modelExecution.execute(executionRequest, options);
+        return await composition.modelExecution.execute(executionRequest, options);
       } catch (error) {
         throw toTalkCapabilityError(error);
       }
