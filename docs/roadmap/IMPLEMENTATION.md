@@ -10,21 +10,22 @@ scope. It does not authorize implementation by itself.
 ## Current state
 
 - Current governance work: **GOV-001 Execution Planning Bootstrap**
-- Current product Work Package: **None**
-- Next product Work Package: **WP-006 Durable TALK Facts**
-- Agent business implementation in progress: **None**
+- Current product Work Package: **WP-006 Durable TALK Facts**
+- Next product Work Package: **WP-007 Conversation/Message Persistence**
+- Agent business implementation in progress: **WP-006 authorized; implementation branch pending**
 - Frozen architecture source: [`01-跨模块契约与架构决策.md`](../architecture/01-跨模块契约与架构决策.md)
 
 ## Work Package status
 
-| Work Package | Scope                                              | Status             | Evidence                    |
-| ------------ | -------------------------------------------------- | ------------------ | --------------------------- |
-| WP-000       | Repository bootstrap and verification toolchain    | COMPLETED / FROZEN | `0356ad7` / `WP-000`        |
-| WP-001       | Secret and API key protection baseline             | COMPLETED / FROZEN | `84df440` / `WP-001`        |
-| WP-002       | Architecture Guard and trusted governance baseline | COMPLETED / FROZEN | `a60dd92` / PR #1 and PR #2 |
-| WP-003       | Contract Kernel for the first TALK vertical slice  | COMPLETED / FROZEN | `5d1d49a` / PR #13          |
-| WP-004       | Fake TALK end-to-end vertical slice                | COMPLETED / FROZEN | `6302e7f` / PR #24          |
-| WP-005       | Real TALK Provider + Model Supply foundation       | COMPLETED / FROZEN | `59ce02f` / PR #27          |
+| Work Package | Scope                                                   | Status                         | Evidence                      |
+| ------------ | ------------------------------------------------------- | ------------------------------ | ----------------------------- |
+| WP-000       | Repository bootstrap and verification toolchain         | COMPLETED / FROZEN             | `0356ad7` / `WP-000`          |
+| WP-001       | Secret and API key protection baseline                  | COMPLETED / FROZEN             | `84df440` / `WP-001`          |
+| WP-002       | Architecture Guard and trusted governance baseline      | COMPLETED / FROZEN             | `a60dd92` / PR #1 and PR #2   |
+| WP-003       | Contract Kernel for the first TALK vertical slice       | COMPLETED / FROZEN             | `5d1d49a` / PR #13            |
+| WP-004       | Fake TALK end-to-end vertical slice                     | COMPLETED / FROZEN             | `6302e7f` / PR #24            |
+| WP-005       | Real TALK Provider + Model Supply foundation            | COMPLETED / FROZEN             | `59ce02f` / PR #27            |
+| WP-006       | PostgreSQL durable Operation/Graph/Receipt/Event replay | CURRENT / IMPLEMENTATION READY | `6150862` / PR #28 and PR #29 |
 
 The frozen WP-003 scope and acceptance criteria remain defined by its approved
 planning record and implementation evidence. The original WP-003 planning record
@@ -32,12 +33,11 @@ is not reopened by later Work Packages.
 
 ## Queued work
 
-| Order | Work Package | Intent                                                  | Entry gate                                                  |
-| ----- | ------------ | ------------------------------------------------------- | ----------------------------------------------------------- |
-| 1     | WP-006       | PostgreSQL durable Operation/Graph/Receipt/Event replay | Approved plan + merged WP-006 ADR/CCR; WP-005 frozen        |
-| 2     | WP-007       | Conversation/Message persistence and multi-turn base    | WP-006 completed/frozen; separate approved planning record  |
-| 3     | WP-008       | Durable Task/Worker recovery with Redis/BullMQ          | WP-007 completed/frozen; separate approved planning record  |
-| 4     | WP-009       | IMAGE vertical slice                                    | TALK durability/recovery stable; separate approved planning |
+| Order | Work Package | Intent                                               | Entry gate                                                  |
+| ----- | ------------ | ---------------------------------------------------- | ----------------------------------------------------------- |
+| 1     | WP-007       | Conversation/Message persistence and multi-turn base | WP-006 completed/frozen; separate approved planning record  |
+| 2     | WP-008       | Durable Task/Worker recovery with Redis/BullMQ       | WP-007 completed/frozen; separate approved planning record  |
+| 3     | WP-009       | IMAGE vertical slice                                 | TALK durability/recovery stable; separate approved planning |
 
 ## Deferred scope
 
